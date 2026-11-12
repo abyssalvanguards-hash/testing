@@ -106,3 +106,29 @@ def test_backup_payload_rejects_oversized_collections_and_bad_boolean_types():
     }
     with pytest.raises(ValueError):
         validate_backup_payload(invalid_boolean, 123)
+
+
+@pytest.mark.parametrize("role", [
+    {"name": "BadColor", "color": 0x1000000},
+    {"name": "BadPermissions", "permissions": 1 << 53},
+])
+def test_backup_payload_rejects_out_of_range_role_fields(role):
+    payload = {"format": 1, "guild_id": "123", "roles": [role], "channels": []}
+    with pytest.raises(ValueError):
+        validate_backup_payload(payload, 123)
+
+
+@pytest.mark.parametrize("channel", [
+    {"name": "general", "type": "text", "topic": []},
+    {"name": "general", "type": "text", "topic": "x" * 1025},
+    {"name": "voice", "type": "voice", "bitrate": 7999},
+    {"name": "voice", "type": "voice", "user_limit": 100},
+    {"name": "general", "type": "text", "overwrites": [{
+        "target_type": "role", "target_name": "Members",
+        "allow": 1 << 53, "deny": 0,
+    }]},
+])
+def test_backup_payload_rejects_invalid_channel_api_fields(channel):
+    payload = {"format": 1, "guild_id": "123", "roles": [], "channels": [channel]}
+    with pytest.raises(ValueError):
+        validate_backup_payload(payload, 123)
