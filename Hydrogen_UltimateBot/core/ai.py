@@ -70,8 +70,14 @@ class GeminiService:
         try:
             async with self._semaphore:
                 async with aiohttp.ClientSession(timeout=self.timeout) as session:
-                    async with session.post(url, params={"key": key}, json=body) as response:
-                        raw = await response.text()
+                    for attempt in range(2):
+                        async with session.post(url, params={"key": key}, json=body) as response:
+                            raw = await response.text()
+                            if response.status == 503 and attempt == 0:
+                                # Gemini may briefly reject requests during capacity spikes.
+                                await asyncio.sleep(1.5)
+                                continue
+                            break
                         try:
                             data = json.loads(raw) if raw else {}
                         except json.JSONDecodeError:
