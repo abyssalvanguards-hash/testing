@@ -16,8 +16,9 @@ ACCESS_PATH = BASE_DIR / "data" / "channel_access.json"
 SAFE_ROLE_PERMISSIONS = {
     "send_messages", "read_message_history", "embed_links",
     "attach_files", "add_reactions", "manage_messages", "moderate_members",
-    "manage_threads", "view_audit_log"
+    "manage_threads", "view_audit_log",
 }
+CONFIRMATION_REQUIRED_PERMISSIONS = {"administrator", "manage_roles", "manage_channels"}
 SMALL_CAPS = str.maketrans({
     "a":"ᴀ","b":"ʙ","c":"ᴄ","d":"ᴅ","e":"ᴇ","f":"ꜰ","g":"ɢ","h":"ʜ",
     "i":"ɪ","j":"ᴊ","k":"ᴋ","l":"ʟ","m":"ᴍ","n":"ɴ","o":"ᴏ","p":"ᴘ",
@@ -40,6 +41,39 @@ def category_name(value):
 
 def snowflake(value):
     return int(value) if str(value or "").isdigit() else 0
+
+
+class RolePermissionConfirmation(discord.ui.View):
+    """Require the invoking server owner to approve Gemini's full role-permission plan."""
+
+    def __init__(self, requester_id):
+        super().__init__(timeout=120)
+        self.requester_id = requester_id
+        self.approved = False
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.requester_id:
+            await interaction.response.send_message(
+                "Only the person who started this server build can confirm it.", ephemeral=True
+            )
+            return False
+        return True
+
+    @discord.ui.button(label="Approve permissions", style=discord.ButtonStyle.danger)
+    async def approve(self, interaction, button):
+        self.approved = True
+        await interaction.response.send_message(
+            "Permission plan approved. Hydrogen will now create the missing roles.", ephemeral=True
+        )
+        self.stop()
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction, button):
+        self.approved = False
+        await interaction.response.send_message(
+            "Cancelled. No roles or server layout changes were made.", ephemeral=True
+        )
+        self.stop()
 
 
 class ServerBuilder(commands.Cog):
@@ -66,9 +100,11 @@ class ServerBuilder(commands.Cog):
             "Return ONLY JSON in this exact shape: "
             '{"role_permissions":{"Founder":[],"Moderator":["manage_messages"]}}. '
             "Choose least-privilege Discord role permissions for the listed role names. "
-            "Allowed permission names only: " + ", ".join(sorted(SAFE_ROLE_PERMISSIONS)) + ". "
-            "Never return Administrator, manage_guild, manage_roles, manage_channels, manage_webhooks, "
-            "mention_everyone, kick_members, ban_members, or any permission outside that list. "
+            "Allowed permission names only: " + ", ".join(sorted(SAFE_ROLE_PERMISSIONS | CONFIRMATION_REQUIRED_PERMISSIONS)) + ". "
+            "You may propose administrator, manage_roles, and manage_channels when genuinely appropriate, "
+            "but these three permissions require a separate explicit human confirmation before assignment. "
+            "Never return manage_guild, manage_webhooks, mention_everyone, kick_members, ban_members, "
+            "or any permission outside the allowed list. "
             "Do not invent roles. Roles: " + json.dumps(role_names, ensure_ascii=False) +
             ". Guild name: " + guild.name
         )
@@ -82,7 +118,7 @@ class ServerBuilder(commands.Cog):
             raise ValueError("AI permission response did not contain role_permissions.")
         return {
             name: sorted(set(v for v in proposed.get(name, [])
-                             if isinstance(v, str) and v in SAFE_ROLE_PERMISSIONS))
+                             if isinstance(v, str) and v in (SAFE_ROLE_PERMISSIONS | CONFIRMATION_REQUIRED_PERMISSIONS)))
             if isinstance(proposed.get(name, []), list) else []
             for name in role_names
         }
@@ -166,6 +202,44 @@ class ServerBuilder(commands.Cog):
                 raise ValueError("Unknown protected channel IDs: " + ", ".join(missing_ids[:10]))
         except (OSError, ValueError, json.JSONDecodeError, AIUnavailable, AttributeError) as exc:
             return await ctx.send(f"{Emoji.error} Preflight failed; no server changes were made. {str(exc)[:250]}")
+
+        proposed_lines = []
+        privileged_proposals = []
+        for base_name in template["roles"]:
+            permissions = role_permissions.get(base_name, [])
+            if permissions:
+                proposed_lines.append(f"**{role_name(base_name)}:** {', '.join(permissions)}")
+            if set(permissions) & CONFIRMATION_REQUIRED_PERMISSIONS:
+                privileged_proposals.append((role_name(base_name),
+                    sorted(set(permissions) & CONFIRMATION_REQUIRED_PERMISSIONS)))
+
+        if privileged_proposals:
+            lines = [
+                "**Gemini proposed elevated permissions. Review the complete role plan below.**",
+                "Administrator, Manage Roles, and Manage Channels will NOT be assigned unless you approve.",
+                *proposed_lines
+            ]
+            description = "\\n".join(lines)
+            if len(description) > 4000:
+                description = description[:3900] + "\\n…(plan shortened; cancel and reduce the role list)"
+            embed = discord.Embed(
+                title="Confirm Gemini role permissions",
+                description=description,
+                color=discord.Color.orange()
+            )
+            embed.set_footer(text="Only the server owner / configured Hydrogen owner can approve. Expires in 120 seconds.")
+            confirmation = RolePermissionConfirmation(ctx.author.id)
+            confirmation_message = await ctx.send(embed=embed, view=confirmation)
+            await confirmation.wait()
+            try:
+                await confirmation_message.edit(view=None)
+            except discord.HTTPException:
+                pass
+            if not confirmation.approved:
+                return await ctx.send(
+                    f"{Emoji.error} Permission plan was not approved (cancelled or timed out). "
+                    "No roles, categories, or channels were created."
+                )
 
         made_roles, kept_roles, made_categories, made_channels, kept_channels = [], [], [], [], []
         for base_name in template["roles"]:
