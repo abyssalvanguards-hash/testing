@@ -1,0 +1,117 @@
+"""Owner-controlled busy mode and conservative server-structure backups."""
+import json
+import re
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+import discord
+from discord.ext import commands, tasks
+from core import db
+from core.security import is_server_owner_or_global
+
+BASE = Path(__file__).resolve().parents[1]
+BACKUP_DIR = BASE / "data" / "backups"
+
+def parse_duration(value):
+    match = re.fullmatch(r"([1-9][0-9]?)(h|d)", str(value).strip().lower())
+    if not match:
+        raise ValueError("Use a duration such as 6h, 12h, or 2d (maximum 30d).")
+    amount, unit = int(match.group(1)), match.group(2)
+    hours = amount if unit == "h" else amount * 24
+    if hours > 30 * 24:
+        raise ValueError("Busy mode can be set for at most 30 days at a time.")
+    return timedelta(hours=hours)
+
+class ServerCare(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.expiry_check.start()
+
+    async def cog_unload(self):
+        self.expiry_check.cancel()
+
+    async def _owner(self, ctx):
+        if not ctx.guild or not await is_server_owner_or_global(ctx.author, self.bot.owner_ids):
+            await ctx.reply("Only the server owner or configured Hydrogen owner can use this command.")
+            return False
+        return True
+
+    @commands.hybrid_command(name="busy")
+    async def busy(self, ctx, duration: str):
+        """Enable server-care mode for a limited period (examples: 12h, 2d)."""
+        if not await self._owner(ctx): return
+        try: delta = parse_duration(duration)
+        except ValueError as exc: return await ctx.reply(str(exc))
+        now = datetime.now(timezone.utc); expires = now + delta
+        await db.execute("INSERT INTO busy_states(guild_id,owner_id,expires_at,created_at) VALUES(?,?,?,?) ON CONFLICT(guild_id) DO UPDATE SET owner_id=excluded.owner_id, expires_at=excluded.expires_at, created_at=excluded.created_at", (ctx.guild.id, ctx.author.id, expires.isoformat(), now.isoformat()))
+        await ctx.reply(f"Server-care mode is enabled until <t:{int(expires.timestamp())}:F>. Hydrogen continues its already-configured moderation, welcome, and logging features. It will not invent new rules or perform unapproved administrative changes.")
+
+    @commands.hybrid_command(name="busyoff")
+    async def busy_off(self, ctx):
+        """Turn off server-care mode early."""
+        if not await self._owner(ctx): return
+        await db.execute("DELETE FROM busy_states WHERE guild_id=?", (ctx.guild.id,))
+        await ctx.reply("Server-care mode is now off.")
+
+    @commands.hybrid_command(name="busystatus")
+    async def busy_status(self, ctx):
+        if not ctx.guild: return await ctx.reply("Use this command in a server.")
+        row = await db.fetchone("SELECT expires_at FROM busy_states WHERE guild_id=?", (ctx.guild.id,))
+        if not row: return await ctx.reply("Server-care mode is currently off.")
+        try: expiry = datetime.fromisoformat(row["expires_at"])
+        except (TypeError, ValueError):
+            await db.execute("DELETE FROM busy_states WHERE guild_id=?", (ctx.guild.id,))
+            return await ctx.reply("The saved busy-mode expiry was invalid and has been cleared.")
+        if expiry <= datetime.now(timezone.utc):
+            await db.execute("DELETE FROM busy_states WHERE guild_id=?", (ctx.guild.id,))
+            return await ctx.reply("Server-care mode has expired.")
+        await ctx.reply(f"Server-care mode is on until <t:{int(expiry.timestamp())}:F>.")
+
+    @tasks.loop(minutes=5)
+    async def expiry_check(self):
+        await db.execute("DELETE FROM busy_states WHERE expires_at<=?", (datetime.now(timezone.utc).isoformat(),))
+
+    @expiry_check.before_loop
+    async def before_expiry_check(self): await self.bot.wait_until_ready()
+
+    def _snapshot(self, guild):
+        roles = []
+        for role in guild.roles:
+            if role.is_default() or role.managed: continue
+            roles.append({"name": role.name, "permissions": role.permissions.value, "color": role.color.value, "hoist": role.hoist, "mentionable": role.mentionable, "position": role.position})
+        channels = []
+        for channel in guild.channels:
+            kind = "category" if isinstance(channel, discord.CategoryChannel) else "text" if isinstance(channel, discord.TextChannel) else "voice" if isinstance(channel, discord.VoiceChannel) else "stage" if isinstance(channel, discord.StageChannel) else "other"
+            overwrites = []
+            for target, overwrite in channel.overwrites.items():
+                if isinstance(target, discord.Role):
+                    allow, deny = overwrite.pair()
+                    overwrites.append({"target_type": "role", "target_name": target.name, "allow": allow.value, "deny": deny.value})
+            item = {"name": channel.name, "type": kind, "position": channel.position, "category": channel.category.name if getattr(channel, "category", None) else None, "overwrites": overwrites}
+            if isinstance(channel, discord.TextChannel): item.update({"topic": channel.topic, "nsfw": channel.nsfw, "slowmode_delay": channel.slowmode_delay})
+            if isinstance(channel, (discord.VoiceChannel, discord.StageChannel)): item.update({"bitrate": channel.bitrate, "user_limit": channel.user_limit})
+            channels.append(item)
+        return {"format": 1, "guild_id": str(guild.id), "guild_name": guild.name, "created_at": datetime.now(timezone.utc).isoformat(), "limitations": ["Message history is not included.", "Member lists and personal data are not included.", "Managed/integration roles are not included."], "roles": roles, "channels": channels}
+
+    @commands.hybrid_group(name="backup", invoke_without_command=True)
+    async def backup(self, ctx): await ctx.reply("Use /backup create or /backup list.")
+
+    @backup.command(name="create")
+    async def backup_create(self, ctx):
+        """Create a JSON backup of server roles, channels, and role overwrites."""
+        if not await self._owner(ctx): return
+        guild_dir = BACKUP_DIR / str(ctx.guild.id); guild_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"); path = guild_dir / f"{stamp}.json"
+        payload = self._snapshot(ctx.guild)
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        cur = await db.execute("INSERT INTO server_backups(guild_id,created_by,file_path,created_at,description) VALUES(?,?,?,?,?)", (ctx.guild.id, ctx.author.id, str(path.relative_to(BASE)), payload["created_at"], f"{len(payload['roles'])} roles; {len(payload['channels'])} channels"))
+        await ctx.reply(f"Backup #{cur.lastrowid} created. Includes {len(payload['roles'])} roles and {len(payload['channels'])} channels. Message history and member data are not included.")
+
+    @backup.command(name="list")
+    async def backup_list(self, ctx):
+        if not await self._owner(ctx): return
+        rows = await db.fetchall("SELECT id,created_at,description FROM server_backups WHERE guild_id=? ORDER BY id DESC LIMIT 10", (ctx.guild.id,))
+        if not rows: return await ctx.reply("No backups found for this server.")
+        lines = [f"#{r['id']} • {r['created_at']} • {r['description'] or 'Server structure'}" for r in rows]
+        await ctx.reply("**Recent server backups**\n" + "\n".join(lines))
+
+async def setup(bot): await bot.add_cog(ServerCare(bot))
