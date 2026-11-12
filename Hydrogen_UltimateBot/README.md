@@ -230,7 +230,7 @@ The web panel is a separate, optional service under `web_panel/`. It is not need
 - The panel is designed for outbound bot polling, so the bot host does not need a public web port.
 - Leave `PANEL_ENABLED=false` (the default) until the bot connector is installed and the panel is deployed.
 - Panel deployment variables are documented in `web_panel/.env.example`.
-- The initial panel service provides Discord OAuth2 sign-in for server owners and a request queue. Bot-side validation, action previews, confirmations, and command-result display are still being developed; do not use it for live server changes yet.
+- The panel provides Discord OAuth2 sign-in for server owners, a request queue/history view, and an optional outbound bot connector. Supported requests are server status, busy-mode status, backup listing, and Gemini-generated restructuring/permission plans. Plans are previews only: review them with `/showplan <id>` and apply them in Discord with `/applyplan <id> CONFIRM` as the actual server owner. The panel does not directly apply server changes.
 - Use HTTPS and unique random values for `PANEL_SHARED_SECRET` and `PANEL_SESSION_SECRET`. Never reuse your Discord bot token or Gemini API key.
 
 The panel is intentionally separate so a panel outage cannot prevent the Discord bot from starting or handling Discord events.
@@ -244,4 +244,4 @@ The panel is intentionally separate so a panel outage cannot prevent the Discord
 - `/backup restore <id>` previews missing structure. Only the actual server owner can run `/backup restore <id> CONFIRM`. Restore creates missing roles/categories/channels only; it does not edit or delete existing items.
 - Backups exclude message history, member lists, and member-role assignments. Restore may stop partway if Discord permissions or role hierarchy prevent an operation.
 
-The web panel currently supports owner login, request submission/history, and a limited bot connector. The connector currently handles server-status requests; other panel actions are explicitly not enabled until their approval workflows are complete.
+The panel connector supports server status, busy-mode status, backup listing, and preview-plan creation for restructuring and permission reviews. All actual server mutations remain gated by the actual server owner's Discord confirmation.
