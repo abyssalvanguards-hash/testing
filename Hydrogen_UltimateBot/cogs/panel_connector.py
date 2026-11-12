@@ -17,6 +17,39 @@ from core.security import is_server_owner_or_global, safe_name
 
 log = logging.getLogger(__name__)
 
+PANEL_ACTIONS = {"restructure", "permissions", "busy_status", "backup_list", "unsupported"}
+PANEL_PERMISSION_ALLOWLIST = {"view_channel", "send_messages", "read_message_history", "embed_links", "attach_files", "add_reactions"}
+
+
+def parse_panel_action(raw):
+    """Parse Gemini classifier output into a strict action enum."""
+    if not isinstance(raw, str):
+        return "unsupported"
+    cleaned = re.sub(r"^\x60\x60\x60(?:json)?\s*|\s*\x60\x60\x60$", "", raw.strip(), flags=re.I)
+    start, end = cleaned.find("{"), cleaned.rfind("}")
+    if start < 0 or end <= start:
+        return "unsupported"
+    try:
+        parsed = json.loads(cleaned[start:end + 1])
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return "unsupported"
+    action = parsed.get("action") if isinstance(parsed, dict) else None
+    return action if isinstance(action, str) and action in PANEL_ACTIONS else "unsupported"
+
+
+def clean_panel_permission_names(values):
+    """Keep only known string permission names and remove duplicates."""
+    if not isinstance(values, list):
+        return []
+    return sorted({value for value in values if isinstance(value, str)} & PANEL_PERMISSION_ALLOWLIST)
+
+
+def clean_panel_name(value):
+    """Normalize a model-proposed Discord channel/category name."""
+    if not isinstance(value, str) or not value.strip():
+        return ""
+    return safe_name(value.strip()[:90])
+
 
 class PanelConnector(commands.Cog):
     def __init__(self, bot):
@@ -103,9 +136,7 @@ class PanelConnector(commands.Cog):
                 "Anything else is unsupported. User request: " + command[:1500],
                 guild_id=guild.id, user_id=user_id, purpose="panel_intent"
             )
-            raw = re.sub(r"^\x60\x60\x60(?:json)?\s*|\s*\x60\x60\x60$", "", raw.strip(), flags=re.I)
-            parsed = json.loads(raw[raw.find("{"):raw.rfind("}") + 1])
-            action = parsed.get("action") if isinstance(parsed, dict) else "unsupported"
+            action = parse_panel_action(raw)
         except Exception as exc:
             await self._report(command_id, "failed", f"Gemini could not classify this request: {type(exc).__name__}.")
             return
