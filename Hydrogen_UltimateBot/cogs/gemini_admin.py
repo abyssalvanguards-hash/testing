@@ -13,7 +13,7 @@ class GeminiAdmin(commands.Cog):
     async def _owner_only(self, ctx):
         if not is_global_owner(ctx.author.id, self.bot.owner_ids):
             await ctx.reply(
-                "Only configured Hydrogen bot owners can manage Gemini keys.",
+                "Only configured WardenX Manager bot owners can manage Gemini keys.",
                 ephemeral=True
             )
             return False
@@ -22,7 +22,7 @@ class GeminiAdmin(commands.Cog):
     @commands.hybrid_group(
         name="gemini",
         invoke_without_command=True,
-        description="Manage Hydrogen Gemini settings"
+        description="Manage WardenX Manager Gemini settings"
     )
     async def gemini(self, ctx):
         await ctx.reply(
@@ -87,7 +87,7 @@ class GeminiAdmin(commands.Cog):
         await ctx.defer(ephemeral=True)
         try:
             result = await self.bot.ai.ask(
-                "Reply with exactly: Hydrogen Gemini connection OK.",
+                "Reply with exactly: WardenX Manager Gemini connection OK.",
                 purpose="owner_test"
             )
             await ctx.send(
