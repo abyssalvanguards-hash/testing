@@ -21,29 +21,59 @@ def validate_backup_payload(payload, guild_id):
     channels = payload.get("channels")
     if not isinstance(roles, list) or not isinstance(channels, list):
         raise ValueError("Backup roles or channels are malformed.")
+    if len(roles) > 250 or len(channels) > 500:
+        raise ValueError("Backup exceeds supported role or channel limits.")
+    role_names = set()
     for role in roles:
         if not isinstance(role, dict) or not isinstance(role.get("name"), str) or not role["name"].strip():
             raise ValueError("Backup contains an invalid role entry.")
-        for key in ("permissions", "color"):
-            if key in role and (not isinstance(role[key], int) or role[key] < 0):
+        name = role["name"]
+        if len(name) > 100 or name in role_names:
+            raise ValueError("Backup contains an overlong or duplicate role name.")
+        role_names.add(name)
+        for key in ("permissions", "color", "position"):
+            if key in role and (type(role[key]) is not int or role[key] < 0):
                 raise ValueError("Backup contains invalid role settings.")
+        if "hoist" in role and type(role["hoist"]) is not bool:
+            raise ValueError("Backup contains invalid role settings.")
+        if "mentionable" in role and type(role["mentionable"]) is not bool:
+            raise ValueError("Backup contains invalid role settings.")
+    channel_names = set()
     for channel in channels:
         if not isinstance(channel, dict) or channel.get("type") not in {"category", "text", "voice"}:
             raise ValueError("Backup contains an unsupported channel entry.")
         if not isinstance(channel.get("name"), str) or not channel["name"].strip():
             raise ValueError("Backup contains an invalid channel name.")
+        if len(channel["name"]) > 100:
+            raise ValueError("Backup contains an overlong channel name.")
+        name_key = (channel["type"], channel["name"])
+        if name_key in channel_names:
+            raise ValueError("Backup contains duplicate channel names.")
+        channel_names.add(name_key)
+        category = channel.get("category")
+        if category is not None and (not isinstance(category, str) or len(category) > 100):
+            raise ValueError("Backup contains an invalid category reference.")
         overwrites = channel.get("overwrites", [])
-        if not isinstance(overwrites, list):
+        if not isinstance(overwrites, list) or len(overwrites) > 250:
             raise ValueError("Backup channel overwrites are malformed.")
         for overwrite in overwrites:
             if (not isinstance(overwrite, dict)
                     or overwrite.get("target_type") != "role"
                     or not isinstance(overwrite.get("target_name"), str)
-                    or not isinstance(overwrite.get("allow", 0), int)
-                    or not isinstance(overwrite.get("deny", 0), int)
+                    or len(overwrite["target_name"]) > 100
+                    or type(overwrite.get("allow", 0)) is not int
+                    or type(overwrite.get("deny", 0)) is not int
                     or overwrite.get("allow", 0) < 0
                     or overwrite.get("deny", 0) < 0):
                 raise ValueError("Backup contains an invalid permission overwrite.")
+        for key in ("nsfw",):
+            if key in channel and type(channel[key]) is not bool:
+                raise ValueError("Backup contains invalid channel settings.")
+        for key in ("slowmode_delay", "bitrate", "user_limit", "position"):
+            if key in channel and (type(channel[key]) is not int or channel[key] < 0):
+                raise ValueError("Backup contains invalid channel settings.")
+        if channel.get("type") == "text" and channel.get("slowmode_delay", 0) > 21600:
+            raise ValueError("Backup contains an invalid slowmode value.")
     return roles, channels
 
 
