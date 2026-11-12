@@ -109,7 +109,7 @@ class ServerCare(commands.Cog):
 
     async def _owner(self, ctx):
         if not ctx.guild or not await is_server_owner_or_global(ctx.author, self.bot.owner_ids):
-            await ctx.reply("Only the server owner or configured Hydrogen owner can use this command.")
+            await ctx.reply("Only the server owner or configured WardenX Manager owner can use this command.")
             return False
         return True
 
@@ -121,7 +121,7 @@ class ServerCare(commands.Cog):
         except ValueError as exc: return await ctx.reply(str(exc))
         now = datetime.now(timezone.utc); expires = now + delta
         await db.execute("INSERT INTO busy_states(guild_id,owner_id,expires_at,created_at) VALUES(?,?,?,?) ON CONFLICT(guild_id) DO UPDATE SET owner_id=excluded.owner_id, expires_at=excluded.expires_at, created_at=excluded.created_at", (ctx.guild.id, ctx.author.id, expires.isoformat(), now.isoformat()))
-        await ctx.reply(f"Server-care mode is enabled until <t:{int(expires.timestamp())}:F>. Hydrogen continues its already-configured moderation, welcome, and logging features. It will not invent new rules or perform unapproved administrative changes.")
+        await ctx.reply(f"Server-care mode is enabled until <t:{int(expires.timestamp())}:F>. WardenX Manager continues its already-configured moderation, welcome, and logging features. It will not invent new rules or perform unapproved administrative changes.")
 
     @commands.hybrid_command(name="busyoff")
     async def busy_off(self, ctx):
@@ -266,7 +266,7 @@ class ServerCare(commands.Cog):
         if confirmation != "CONFIRM": return await ctx.reply(preview)
         bot_member = ctx.guild.me
         if bot_member is None or not bot_member.guild_permissions.manage_roles or not bot_member.guild_permissions.manage_channels:
-            return await ctx.reply("Hydrogen needs Manage Roles and Manage Channels permissions to restore this structure.")
+            return await ctx.reply("WardenX Manager needs Manage Roles and Manage Channels permissions to restore this structure.")
         try:
             role_map = {r.name: r for r in ctx.guild.roles}
             for item in missing_roles:
