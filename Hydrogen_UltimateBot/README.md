@@ -240,7 +240,7 @@ The panel is intentionally separate so a panel outage cannot prevent the Discord
 
 - `/busy 2d` enables an owner-controlled server-care status for up to 30 days. Use `/busystatus` to check it and `/busyoff` to end it early. The status expires automatically. Existing configured moderation, welcome, and logging features continue; busy mode does not grant Gemini new authority.
 - `/backup create` saves a JSON snapshot of server roles, channels, and role permission overwrites under `data/backups/<guild_id>/`.
-- `/backup list` lists recent backups.
+- `/backup list` lists recent backups.\n- `/backup export <id>` sends the selected JSON backup file; only the actual server owner can export it.
 - `/backup restore <id>` previews missing structure. Only the actual server owner can run `/backup restore <id> CONFIRM`. Restore creates missing roles/categories/channels only; it does not edit or delete existing items.
 - Backups exclude message history, member lists, and member-role assignments. Restore may stop partway if Discord permissions or role hierarchy prevent an operation.
 
