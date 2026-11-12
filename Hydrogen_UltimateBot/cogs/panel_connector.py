@@ -7,10 +7,11 @@ fully wired; unsupported management requests are explicitly rejected.
 import asyncio
 import logging
 import os
+import json
+import re
 import aiohttp
 import discord
 from core import db
-import json
 from discord.ext import commands, tasks
 from core.security import is_server_owner_or_global
 
@@ -82,7 +83,7 @@ class PanelConnector(commands.Cog):
         normalized = command.casefold().strip()
         if normalized in {"status", "server status", "show server status"}:
             result = (
-                f"Server: {guild.name}\\nMembers: {guild.member_count}\\n"
+                f"Server: {guild.name}\nMembers: {guild.member_count}\\n"
                 f"Channels: {len(guild.channels)}\\nRoles: {len(guild.roles)}\\n"
                 f"Hydrogen: online"
             )
@@ -102,8 +103,7 @@ class PanelConnector(commands.Cog):
                 "Anything else is unsupported. User request: " + command[:1500],
                 guild_id=guild.id, user_id=user_id, purpose="panel_intent"
             )
-            import json, re
-            raw = re.sub(r"^\x60\x60\x60(?:json)?\\s*|\\s*\x60\x60\x60$", "", raw.strip(), flags=re.I)
+            raw = re.sub(r"^\x60\x60\x60(?:json)?\s*|\\s*\x60\x60\x60$", "", raw.strip(), flags=re.I)
             parsed = json.loads(raw[raw.find("{"):raw.rfind("}") + 1])
             action = parsed.get("action") if isinstance(parsed, dict) else "unsupported"
         except Exception as exc:
