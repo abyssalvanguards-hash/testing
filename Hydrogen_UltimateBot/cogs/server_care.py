@@ -114,4 +114,55 @@ class ServerCare(commands.Cog):
         lines = [f"#{r['id']} • {r['created_at']} • {r['description'] or 'Server structure'}" for r in rows]
         await ctx.reply("**Recent server backups**\n" + "\n".join(lines))
 
+    @backup.command(name="restore")
+    async def backup_restore(self, ctx, backup_id: int, confirmation: str = ""):
+        """Restore missing structure from a backup; never deletes existing items."""
+        if not await self._owner(ctx): return
+        if ctx.author.id != ctx.guild.owner_id:
+            return await ctx.reply("Only the actual Discord server owner can restore a server backup.")
+        row = await db.fetchone("SELECT file_path FROM server_backups WHERE id=? AND guild_id=?", (backup_id, ctx.guild.id))
+        if not row: return await ctx.reply("Backup not found for this server.")
+        path = (BASE / row["file_path"]).resolve()
+        if BACKUP_DIR.resolve() not in path.parents or not path.is_file():
+            return await ctx.reply("Backup file is missing or its path is invalid.")
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if payload.get("format") != 1 or str(payload.get("guild_id")) != str(ctx.guild.id):
+                raise ValueError("Backup format or server ID does not match.")
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            return await ctx.reply(f"Could not read this backup: {str(exc)[:180]}")
+        missing_roles = [x for x in payload.get("roles", []) if not discord.utils.get(ctx.guild.roles, name=x.get("name"))]
+        missing_categories = [x for x in payload.get("channels", []) if x.get("type") == "category" and not discord.utils.get(ctx.guild.categories, name=x.get("name"))]
+        missing_channels = [x for x in payload.get("channels", []) if x.get("type") in {"text", "voice"} and not discord.utils.get(ctx.guild.channels, name=x.get("name"))]
+        preview = (f"Backup #{backup_id}: create {len(missing_roles)} roles, {len(missing_categories)} categories, and {len(missing_channels)} channels. Existing items will be left unchanged; nothing will be deleted. Message history and member assignments cannot be restored. To proceed, run /backup restore {backup_id} CONFIRM.")
+        if confirmation != "CONFIRM": return await ctx.reply(preview)
+        if not ctx.guild.me.guild_permissions.manage_roles or not ctx.guild.me.guild_permissions.manage_channels:
+            return await ctx.reply("Hydrogen needs Manage Roles and Manage Channels permissions to restore this structure.")
+        try:
+            role_map = {r.name: r for r in ctx.guild.roles}
+            for item in missing_roles:
+                role = await ctx.guild.create_role(name=str(item["name"])[:100], permissions=discord.Permissions(int(item.get("permissions", 0))), colour=discord.Colour(int(item.get("color", 0))), hoist=bool(item.get("hoist", False)), mentionable=bool(item.get("mentionable", False)), reason=f"Owner-confirmed Hydrogen backup restore #{backup_id}")
+                role_map[role.name] = role
+            category_map = {x.name: x for x in ctx.guild.categories}
+            for item in missing_categories:
+                overwrites = {}
+                for ow in item.get("overwrites", []):
+                    role = role_map.get(ow.get("target_name"))
+                    if role: overwrites[role] = discord.PermissionOverwrite.from_pair(discord.Permissions(int(ow.get("allow", 0))), discord.Permissions(int(ow.get("deny", 0))))
+                category = await ctx.guild.create_category(str(item["name"])[:100], overwrites=overwrites, reason=f"Owner-confirmed Hydrogen backup restore #{backup_id}")
+                category_map[category.name] = category
+            for item in missing_channels:
+                category = category_map.get(item.get("category")); overwrites = {}
+                for ow in item.get("overwrites", []):
+                    role = role_map.get(ow.get("target_name"))
+                    if role: overwrites[role] = discord.PermissionOverwrite.from_pair(discord.Permissions(int(ow.get("allow", 0))), discord.Permissions(int(ow.get("deny", 0))))
+                name = str(item["name"])[:100]; reason = f"Owner-confirmed Hydrogen backup restore #{backup_id}"
+                if item["type"] == "text":
+                    await ctx.guild.create_text_channel(name, category=category, overwrites=overwrites, topic=item.get("topic"), nsfw=bool(item.get("nsfw", False)), slowmode_delay=int(item.get("slowmode_delay", 0)), reason=reason)
+                elif item["type"] == "voice":
+                    await ctx.guild.create_voice_channel(name, category=category, overwrites=overwrites, bitrate=min(int(item.get("bitrate", 64000)), ctx.guild.bitrate_limit), user_limit=int(item.get("user_limit", 0)), reason=reason)
+        except (discord.Forbidden, discord.HTTPException, ValueError, TypeError, KeyError) as exc:
+            return await ctx.reply(f"Restore stopped safely after a partial restore: {type(exc).__name__}: {str(exc)[:180]}")
+        await ctx.reply(f"Restore completed: created {len(missing_roles)} roles, {len(missing_categories)} categories, and {len(missing_channels)} channels. No existing items were edited or deleted.")
+
 async def setup(bot): await bot.add_cog(ServerCare(bot))
