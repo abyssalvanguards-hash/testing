@@ -91,6 +91,15 @@ async def init_db():
             await db.execute("ALTER TABLE invoices ADD COLUMN txid TEXT")
         if "confirmations" not in cols:
             await db.execute("ALTER TABLE invoices ADD COLUMN confirmations INTEGER DEFAULT 0")
+        # Slot recovery columns are additive so existing installations keep their data.
+        slot_cols = {row[1] for row in await (await db.execute("PRAGMA table_info(slots)")).fetchall()}
+        for column, definition in {
+            "locked": "INTEGER DEFAULT 0",
+            "recovery_hash": "TEXT",
+            "recovery_expires": "TEXT"
+        }.items():
+            if column not in slot_cols:
+                await db.execute(f"ALTER TABLE slots ADD COLUMN {column} {definition}")
         await db.commit()
 
 async def execute(query, params=()):
