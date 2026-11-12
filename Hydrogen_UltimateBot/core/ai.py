@@ -78,29 +78,29 @@ class GeminiService:
                                 await asyncio.sleep(1.5)
                                 continue
                             break
-                        try:
-                            data = json.loads(raw) if raw else {}
-                        except json.JSONDecodeError:
-                            data = {}
-                        if response.status >= 400:
-                            detail = ((data.get("error") or {}).get("message") or raw or "No error details returned")
-                            detail = " ".join(str(detail).split())[:500]
-                            if response.status == 400 and ("API_KEY_INVALID" in detail or "API key not valid" in detail.lower()):
-                                raise AIUnavailable("Gemini rejected the API key (HTTP 400). Check that the key in private_config.py is correct and enabled for the Gemini API.")
-                            if response.status in (401, 403):
-                                raise AIUnavailable(f"Gemini authorization failed (HTTP {response.status}). Check the API key, API access, and project restrictions. Details: {detail}")
-                            if response.status == 404:
-                                raise AIUnavailable(f"Gemini model/API endpoint not found (HTTP 404). Check the configured model name `{self.model}`. Details: {detail}")
-                            if response.status == 429:
-                                raise AIUnavailable("Gemini quota or rate limit reached (HTTP 429). Wait for the provider limit to reset; no backup-key quota rotation is performed.")
-                            raise AIUnavailable(f"Gemini API returned HTTP {response.status}: {detail}")
+                    try:
+                        data = json.loads(raw) if raw else {}
+                    except json.JSONDecodeError:
+                        data = {}
+                    if response.status >= 400:
+                        detail = ((data.get("error") or {}).get("message") or raw or "No error details returned")
+                        detail = " ".join(str(detail).split())[:500]
+                        if response.status == 400 and ("API_KEY_INVALID" in detail or "API key not valid" in detail.lower()):
+                            raise AIUnavailable("Gemini rejected the API key (HTTP 400). Check that the key in private_config.py is correct and enabled for the Gemini API.")
+                        if response.status in (401, 403):
+                            raise AIUnavailable(f"Gemini authorization failed (HTTP {response.status}). Check the API key, API access, and project restrictions. Details: {detail}")
+                        if response.status == 404:
+                            raise AIUnavailable(f"Gemini model/API endpoint not found (HTTP 404). Check the configured model name `{self.model}`. Details: {detail}")
+                        if response.status == 429:
+                            raise AIUnavailable("Gemini quota or rate limit reached (HTTP 429). Wait for the provider limit to reset; no backup-key quota rotation is performed.")
+                        raise AIUnavailable(f"Gemini API returned HTTP {response.status}: {detail}")
 
-                        candidates = data.get("candidates") or []
-                        parts = (((candidates[0] or {}).get("content") or {}).get("parts") or []) if candidates else []
-                        answer = "\n".join(str(part.get("text", "")) for part in parts if part.get("text"))
-                        if not answer:
-                            reason = ((candidates[0] or {}).get("finishReason") if candidates else None) or data.get("promptFeedback", {}).get("blockReason") or "unknown response"
-                            raise AIUnavailable(f"Gemini returned no text ({reason}). Try a shorter request or check the API's safety/availability status.")
+                    candidates = data.get("candidates") or []
+                    parts = (((candidates[0] or {}).get("content") or {}).get("parts") or []) if candidates else []
+                    answer = "\n".join(str(part.get("text", "")) for part in parts if part.get("text"))
+                    if not answer:
+                        reason = ((candidates[0] or {}).get("finishReason") if candidates else None) or data.get("promptFeedback", {}).get("blockReason") or "unknown response"
+                        raise AIUnavailable(f"Gemini returned no text ({reason}). Try a shorter request or check the API's safety/availability status.")
         except AIUnavailable:
             raise
         except asyncio.TimeoutError as exc:
