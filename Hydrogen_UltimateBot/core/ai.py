@@ -25,7 +25,9 @@ class GeminiService:
                 self.active_key_index = index
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
             pass
-        self.timeout = aiohttp.ClientTimeout(total=50, connect=10)
+        # Server-builder prompts can take longer during Gemini capacity spikes.
+        # Keep connection establishment bounded while allowing a longer generation window.
+        self.timeout = aiohttp.ClientTimeout(total=90, connect=10)
         self._semaphore = asyncio.Semaphore(2)
 
     @property
@@ -104,7 +106,7 @@ class GeminiService:
         except AIUnavailable:
             raise
         except asyncio.TimeoutError as exc:
-            raise AIUnavailable("Gemini request timed out after 50 seconds. Try again shortly.") from exc
+            raise AIUnavailable("Gemini request timed out after 90 seconds. Gemini may be overloaded; try again later.") from exc
         except aiohttp.ClientError as exc:
             raise AIUnavailable(f"Could not connect to Gemini ({type(exc).__name__}). Check hosting network access and try again.") from exc
         except Exception as exc:
