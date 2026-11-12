@@ -3,7 +3,7 @@ from config import DB_PATH, DATA_DIR
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS guild_settings (
- guild_id INTEGER PRIMARY KEY, prefix TEXT DEFAULT '
+ guild_id INTEGER PRIMARY KEY, prefix TEXT DEFAULT '$',
  log_channel_id INTEGER, review_channel_id INTEGER,
  staff_role_id INTEGER, admin_role_id INTEGER, mod_role_id INTEGER,
  welcome_channel_id INTEGER, goodbye_channel_id INTEGER,
@@ -77,6 +77,8 @@ async def init_db():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     async with aiosqlite.connect(DB_PATH) as db:
         await db.executescript(SCHEMA)
+        # Upgrade the old built-in prefix for existing guilds.
+        await db.execute("UPDATE guild_settings SET prefix=? WHERE prefix=?", ("$", "!"))
         # Safe additive migrations for databases created by earlier Hydrogen builds.
         # Move the previous built-in default prefix to the new default.
         await db.execute("UPDATE guild_settings SET prefix='
