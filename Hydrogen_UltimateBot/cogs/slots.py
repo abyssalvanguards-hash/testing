@@ -124,7 +124,7 @@ class Slots(commands.Cog):
         )
         try:
             await member.send(
-                f"{Emoji.slot} Your Hydrogen slot in **{member.guild.name}** has been preserved for 30 days.\n"
+                f"{Emoji.slot} Your WardenX Manager slot in **{member.guild.name}** has been preserved for 30 days.\n"
                 f"Recovery code: ||{code}||\n"
                 "Keep this code private. If you rejoin, use /slotrecover in the server. "
                 "An admin may also help verify ownership."
