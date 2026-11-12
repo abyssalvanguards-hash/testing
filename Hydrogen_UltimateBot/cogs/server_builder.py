@@ -38,6 +38,10 @@ def category_name(value):
     return ("━━━「 " + value.upper().strip() + " 」━━━")[:100]
 
 
+def snowflake(value):
+    return int(value) if str(value or "").isdigit() else 0
+
+
 class ServerBuilder(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -85,9 +89,9 @@ class ServerBuilder(commands.Cog):
 
     async def _apply_verification_access(self, guild, config):
         """Apply only explicitly configured channel IDs; never create/replace verification."""
-        verified_id = int(config.get("verified_role_id") or 0)
-        verification_id = int(config.get("verification_channel_id") or 0)
-        protected_ids = [int(x) for x in config.get("protected_channel_ids", []) if str(x).isdigit()]
+        verified_id = snowflake(config.get("verified_role_id"))
+        verification_id = snowflake(config.get("verification_channel_id"))
+        protected_ids = [snowflake(x) for x in config.get("protected_channel_ids", []) if snowflake(x)]
         if not verified_id or not verification_id:
             return False, "Verified role ID or verification channel ID is missing."
         verified = guild.get_role(verified_id)
@@ -151,7 +155,7 @@ class ServerBuilder(commands.Cog):
             except discord.HTTPException:
                 continue
 
-        verified_role = ctx.guild.get_role(int(access_config.get("verified_role_id") or 0))
+        verified_role = ctx.guild.get_role(snowflake(access_config.get("verified_role_id")))
         for category_spec in template["categories"]:
             formatted_category = category_name(category_spec["name"])
             category = discord.utils.get(ctx.guild.categories, name=formatted_category)
@@ -179,9 +183,15 @@ class ServerBuilder(commands.Cog):
                 try:
                     if spec["type"] == "voice":
                         await ctx.guild.create_voice_channel(name, category=category,
+                            overwrites={ctx.guild.default_role: discord.PermissionOverwrite(view_channel=False),
+                                        me: discord.PermissionOverwrite(view_channel=True),
+                                        **({verified_role: discord.PermissionOverwrite(view_channel=True)} if verified_role else {})},
                             reason=f"Hydrogen server builder requested by {ctx.author}")
                     else:
                         await ctx.guild.create_text_channel(name, category=category,
+                            overwrites={ctx.guild.default_role: discord.PermissionOverwrite(view_channel=False),
+                                        me: discord.PermissionOverwrite(view_channel=True),
+                                        **({verified_role: discord.PermissionOverwrite(view_channel=True)} if verified_role else {})},
                             reason=f"Hydrogen server builder requested by {ctx.author}")
                     made_channels.append(name)
                 except discord.HTTPException:
