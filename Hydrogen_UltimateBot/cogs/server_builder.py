@@ -64,7 +64,7 @@ class ServerBuilder(commands.Cog):
     async def _ai_permissions(self, guild, role_names):
         prompt = (
             "Return ONLY JSON in this exact shape: "
-            '{"role_permissions":{"Founder":["view_channel"],"Moderator":["view_channel","manage_messages"]}}. '
+            '{"role_permissions":{"Founder":[],"Moderator":["manage_messages"]}}. '
             "Choose least-privilege Discord role permissions for the listed role names. "
             "Allowed permission names only: " + ", ".join(sorted(SAFE_ROLE_PERMISSIONS)) + ". "
             "Never return Administrator, manage_guild, manage_roles, manage_channels, manage_webhooks, "
