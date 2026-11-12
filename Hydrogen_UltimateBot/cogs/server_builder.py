@@ -172,7 +172,7 @@ class ServerBuilder(commands.Cog):
             "AI permissions were restricted to the safe allow-list; Administrator and other high-risk permissions were blocked. "
             "Existing roles/channels were not edited or deleted. Verification access is not changed by this builder."
         )
-        await ctx.followup.send(summary)
+        await ctx.send(summary)
 
 
 async def setup(bot):
