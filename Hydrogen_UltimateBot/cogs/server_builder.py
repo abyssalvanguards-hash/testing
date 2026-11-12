@@ -91,31 +91,47 @@ class ServerBuilder(commands.Cog):
         """Apply only explicitly configured channel IDs; never create/replace verification."""
         verified_id = snowflake(config.get("verified_role_id"))
         verification_id = snowflake(config.get("verification_channel_id"))
-        protected_ids = [snowflake(x) for x in config.get("protected_channel_ids", []) if snowflake(x)]
+        raw_protected = config.get("protected_channel_ids", [])
         if not verified_id or not verification_id:
             return False, "Verified role ID or verification channel ID is missing."
+        if not isinstance(raw_protected, list):
+            return False, "protected_channel_ids must be a JSON list."
+        if any(not snowflake(value) for value in raw_protected):
+            return False, "Every protected channel ID must be a numeric Discord ID."
+        protected_ids = list(dict.fromkeys(snowflake(value) for value in raw_protected))
         verified = guild.get_role(verified_id)
         verification = guild.get_channel(verification_id)
+        protected = [guild.get_channel(channel_id) for channel_id in protected_ids]
         if verified is None or verification is None:
             return False, "Configured Verified role or verification channel was not found in this server."
+        if any(channel is None for channel in protected):
+            return False, "At least one configured protected channel ID was not found; no verification overwrites were changed."
+        if verification_id in protected_ids:
+            protected = [channel for channel in protected if channel.id != verification_id]
         everyone = guild.default_role
+        # Validate every target before changing any permission overwrites.
         await verification.set_permissions(everyone, view_channel=True,
                                             reason="Hydrogen verification-channel access")
         await verification.set_permissions(verified, view_channel=True,
                                             reason="Hydrogen Verified-role access")
         applied = 0
-        for channel_id in protected_ids:
-            if channel_id == verification_id:
-                continue
-            channel = guild.get_channel(channel_id)
-            if channel is None:
-                continue
+        for channel in protected:
+            # Explicitly deny ordinary roles so an allow on another role cannot
+            # accidentally override the @everyone deny for non-verified members.
+            for role in guild.roles:
+                if role.id == verified.id or role.is_default():
+                    continue
+                await channel.set_permissions(role, view_channel=False,
+                                              reason="Hydrogen Verified-only channel access")
             await channel.set_permissions(everyone, view_channel=False,
                                           reason="Hydrogen Verified-only channel access")
             await channel.set_permissions(verified, view_channel=True,
                                           reason="Hydrogen Verified-only channel access")
+            await channel.set_permissions(guild.me, view_channel=True,
+                                          reason="Hydrogen bot access to protected channel")
             applied += 1
-        return True, f"Verification channel public; {applied} protected channels restricted to Verified."
+        return True, (f"Verification channel public; {applied} protected channels restricted to Verified. "
+                      "Discord Administrator permissions bypass channel overwrites.")
 
     @commands.hybrid_group(name="create", invoke_without_command=True,
                             description="Create the configured server layout")
@@ -136,6 +152,18 @@ class ServerBuilder(commands.Cog):
             template = self._template()
             role_permissions = await self._ai_permissions(ctx.guild, template["roles"])
             access_config = self._guild_access(ctx.guild.id)
+            verified_id = snowflake(access_config.get("verified_role_id"))
+            verification_id = snowflake(access_config.get("verification_channel_id"))
+            if not verified_id or not verification_id:
+                raise ValueError("Configure this guild's Verified role ID and verification channel ID in data/channel_access.json before running the builder.")
+            if ctx.guild.get_role(verified_id) is None or ctx.guild.get_channel(verification_id) is None:
+                raise ValueError("The configured Verified role or verification channel does not exist in this guild.")
+            protected_ids = access_config.get("protected_channel_ids", [])
+            if not isinstance(protected_ids, list) or any(not snowflake(value) for value in protected_ids):
+                raise ValueError("protected_channel_ids must contain only numeric Discord channel IDs.")
+            missing_ids = [str(value) for value in protected_ids if ctx.guild.get_channel(snowflake(value)) is None]
+            if missing_ids:
+                raise ValueError("Unknown protected channel IDs: " + ", ".join(missing_ids[:10]))
         except (OSError, ValueError, json.JSONDecodeError, AIUnavailable, AttributeError) as exc:
             return await ctx.send(f"{Emoji.error} Preflight failed; no server changes were made. {str(exc)[:250]}")
 
