@@ -219,9 +219,9 @@ class ServerBuilder(commands.Cog):
                 "Administrator, Manage Roles, and Manage Channels will NOT be assigned unless you approve.",
                 *proposed_lines
             ]
-            description = "\\n".join(lines)
+            description = "\n".join(lines)
             if len(description) > 4000:
-                description = description[:3900] + "\\n…(plan shortened; cancel and reduce the role list)"
+                description = description[:3900] + "\n…(plan shortened; cancel and review the role template)"
             embed = discord.Embed(
                 title="Confirm Gemini role permissions",
                 description=description,
