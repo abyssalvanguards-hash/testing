@@ -4,7 +4,7 @@
   "category_format": "━━━「 {name_in_caps} 」━━━",
   "categories": [
     {
-      "name": "COMMUNITY",
+      "name": "WELCOME",
       "channels": [
         {
           "name": "welcome",
@@ -145,7 +145,7 @@
     "Senior Staff",
     "Staff",
     "Trial Staff",
-    "Member",
+    "Members",
     "Booster",
     "VIP",
     "1 Invite",
