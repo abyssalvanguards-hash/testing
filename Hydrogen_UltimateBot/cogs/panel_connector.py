@@ -48,7 +48,11 @@ def clean_panel_name(value):
     """Normalize a model-proposed Discord channel/category name."""
     if not isinstance(value, str) or not value.strip():
         return ""
-    return safe_name(value.strip()[:90])
+    # safe_name intentionally falls back to "member" for user-facing names;
+    # for model-proposed Discord structure, reject punctuation-only input.
+    normalized = re.sub(r"[^a-z0-9-]", "-", value.strip().lower())
+    normalized = re.sub(r"-+", "-", normalized).strip("-")[:80]
+    return safe_name(normalized) if normalized else ""
 
 
 class PanelConnector(commands.Cog):
