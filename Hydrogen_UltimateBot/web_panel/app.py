@@ -29,6 +29,7 @@ SESSION_SECRET = os.getenv("PANEL_SESSION_SECRET", "")
 COOKIE_NAME = "hydrogen_panel"
 SESSION_TTL = 8 * 60 * 60
 MAX_BODY = 12_000
+COMMAND_LEASE_SECONDS = 180
 _pending_oauth = {}
 
 
@@ -204,11 +205,22 @@ async def command_history(request):
 async def bot_commands(request):
     _require_bot(request)
     now = int(time.time())
+    # Claim each request for a bounded lease. A long Gemini response must not
+    # be handed to another poller while it is still being processed.
     with _db() as conn:
         conn.execute("BEGIN IMMEDIATE")
-        rows = conn.execute("SELECT id,guild_id,user_id,command FROM commands WHERE status='pending' OR (status='delivered' AND COALESCE(delivered_at,0)<?) ORDER BY id LIMIT 5", (now - 120,)).fetchall()
+        rows = conn.execute(
+            """SELECT id,guild_id,user_id,command FROM commands
+               WHERE status='pending'
+                  OR (status IN ('delivered','processing') AND COALESCE(delivered_at,0)<?)
+               ORDER BY id LIMIT 5""",
+            (now - COMMAND_LEASE_SECONDS,)
+        ).fetchall()
         for row in rows:
-            conn.execute("UPDATE commands SET status='delivered',delivered_at=? WHERE id=?", (now, row["id"]))
+            conn.execute(
+                "UPDATE commands SET status='processing',delivered_at=? WHERE id=?",
+                (now, row["id"])
+            )
     return web.json_response({"commands": [dict(r) for r in rows]})
 
 
