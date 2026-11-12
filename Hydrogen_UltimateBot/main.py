@@ -48,7 +48,7 @@ class HydrogenBot(commands.Bot):
             await self.load_extension(f"cogs.{name}")
 
     async def on_ready(self):
-        logging.info("Hydrogen UltimateBot online as %s | guilds=%s", self.user, len(self.guilds))
+        logging.info("WardenX Manager online as %s | guilds=%s", self.user, len(self.guilds))
         for guild in self.guilds:
             await db.ensure_guild(guild.id)
             if guild.id in self._synced_guilds:
@@ -61,7 +61,7 @@ class HydrogenBot(commands.Bot):
             except discord.HTTPException as exc:
                 logging.error("Slash-command sync failed for guild %s (%s): %s", guild.name, guild.id, exc)
         await self.change_presence(
-            activity=discord.Activity(type=discord.ActivityType.watching, name="Hydrogen UltimateBot")
+            activity=discord.Activity(type=discord.ActivityType.watching, name="WardenX Manager")
         )
 
     async def on_guild_join(self, guild):
