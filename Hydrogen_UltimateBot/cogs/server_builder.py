@@ -380,7 +380,8 @@ class ServerBuilder(commands.Cog):
             f"Roles created: {len(made_roles)} (existing kept: {len(kept_roles)})\n"
             f"Categories created: {len(made_categories)}\n"
             f"Channels created: {len(made_channels)} (existing kept: {len(kept_channels)})\n"
-            f"AI permissions were filtered through the safe allow-list; Administrator is blocked.\n"
+            f"Gemini permissions were filtered; elevated permissions required your explicit approval.\n"
+            f"Classification roles: Hydrogen, Bots, Members (existing members classified; new joins handled automatically).\n"
             f"**Verification access:** {access_note}\n"
             "Existing matching roles/channels are retained and unrelated channels are not deleted."
         )
