@@ -19,6 +19,7 @@ SAFE_ROLE_PERMISSIONS = {
     "manage_threads", "view_audit_log",
 }
 CONFIRMATION_REQUIRED_PERMISSIONS = {"administrator", "manage_roles", "manage_channels"}
+CLASSIFICATION_ROLES = ("Hydrogen", "Bots", "Members")
 SMALL_CAPS = str.maketrans({
     "a":"ᴀ","b":"ʙ","c":"ᴄ","d":"ᴅ","e":"ᴇ","f":"ꜰ","g":"ɢ","h":"ʜ",
     "i":"ɪ","j":"ᴊ","k":"ᴋ","l":"ʟ","m":"ᴍ","n":"ɴ","o":"ᴏ","p":"ᴘ",
@@ -86,6 +87,41 @@ class ServerBuilder(commands.Cog):
         if not isinstance(data.get("categories"), list) or not isinstance(data.get("roles"), list):
             raise ValueError("Server template is malformed.")
         return data
+
+    async def _get_or_create_role(self, guild, base_name):
+        """Return a neutral classification role, creating it when absent."""
+        formatted = role_name(base_name)
+        existing = discord.utils.get(guild.roles, name=formatted)
+        if existing is not None:
+            return existing
+        return await guild.create_role(
+            name=formatted,
+            permissions=discord.Permissions.none(),
+            reason="Hydrogen member and bot role classification",
+        )
+
+    async def _assign_classification(self, member):
+        """Assign Hydrogen, Bots, or Members based on the joining account."""
+        guild = member.guild
+        if self.bot.user and member.id == self.bot.user.id:
+            base_name = "Hydrogen"
+        elif member.bot:
+            base_name = "Bots"
+        else:
+            base_name = "Members"
+        role = await self._get_or_create_role(guild, base_name)
+        if role not in member.roles:
+            await member.add_roles(role, reason="Hydrogen automatic member classification")
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member):
+        try:
+            await self._assign_classification(member)
+        except (discord.Forbidden, discord.HTTPException) as exc:
+            await audit(
+                self.bot, member.guild, "Automatic role assignment failed",
+                f"Could not assign {member} to the correct classification role: {exc}", member
+            )
 
     def _guild_access(self, guild_id):
         if not ACCESS_PATH.exists():
@@ -256,6 +292,33 @@ class ServerBuilder(commands.Cog):
                 made_roles.append(formatted)
             except discord.HTTPException:
                 continue
+
+        # Create/reuse neutral classification roles, then classify every cached member.
+        classification_roles = {}
+        try:
+            for base_name in CLASSIFICATION_ROLES:
+                classification_roles[base_name] = await self._get_or_create_role(ctx.guild, base_name)
+
+            for member in ctx.guild.members:
+                if self.bot.user and member.id == self.bot.user.id:
+                    base_name = "Hydrogen"
+                elif member.bot:
+                    base_name = "Bots"
+                else:
+                    base_name = "Members"
+                target_role = classification_roles[base_name]
+                if target_role not in member.roles:
+                    try:
+                        await member.add_roles(
+                            target_role,
+                            reason="Hydrogen initial server member classification",
+                        )
+                    except (discord.Forbidden, discord.HTTPException):
+                        continue
+        except (discord.Forbidden, discord.HTTPException) as exc:
+            await ctx.send(
+                f"{Emoji.warning} Server layout will continue, but classification-role setup had an error: {str(exc)[:160]}"
+            )
 
         verified_role = ctx.guild.get_role(snowflake(access_config.get("verified_role_id")))
         for category_spec in template["categories"]:
