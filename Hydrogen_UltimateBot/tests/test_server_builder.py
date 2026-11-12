@@ -49,8 +49,8 @@ def test_channel_access_config_is_per_guild_and_uses_placeholders_only():
 
 
 
-def test_classification_roles_cover_hydrogen_bots_and_humans():
-    assert CLASSIFICATION_ROLES == ("Hydrogen", "Bots", "Members")
-    assert role_name("Hydrogen") == "W X・Hydrogen"
+def test_classification_roles_cover_wardenx_bots_and_humans():
+    assert CLASSIFICATION_ROLES == ("WardenX", "Bots", "Members")
+    assert role_name("WardenX") == "W X・WardenX"
     assert role_name("Bots") == "W X・Bots"
     assert role_name("Members") == "W X・Members"
