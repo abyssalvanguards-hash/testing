@@ -299,6 +299,8 @@ class ServerBuilder(commands.Cog):
             for base_name in CLASSIFICATION_ROLES:
                 classification_roles[base_name] = await self._get_or_create_role(ctx.guild, base_name)
 
+            # Force a full member list before assigning roles to every current member.
+            await ctx.guild.chunk(cache=True)
             for member in ctx.guild.members:
                 if self.bot.user and member.id == self.bot.user.id:
                     base_name = "Hydrogen"
