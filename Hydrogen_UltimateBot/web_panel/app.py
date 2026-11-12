@@ -202,11 +202,9 @@ async def command_history(request):
         rows = conn.execute('SELECT id,command,status,created_at,result FROM commands WHERE guild_id=? ORDER BY id DESC LIMIT 20', (guild_id,)).fetchall()
     return web.json_response({'commands': [dict(r) for r in rows]})
 
-async def bot_commands(request):
-    _require_bot(request)
-    now = int(time.time())
-    # Claim each request for a bounded lease. A long Gemini response must not
-    # be handed to another poller while it is still being processed.
+def _claim_commands(now=None):
+    """Atomically lease queued commands to one bot poller."""
+    now = int(time.time()) if now is None else int(now)
     with _db() as conn:
         conn.execute("BEGIN IMMEDIATE")
         rows = conn.execute(
@@ -221,8 +219,12 @@ async def bot_commands(request):
                 "UPDATE commands SET status='processing',delivered_at=? WHERE id=?",
                 (now, row["id"])
             )
-    return web.json_response({"commands": [dict(r) for r in rows]})
+    return [dict(row) for row in rows]
 
+
+async def bot_commands(request):
+    _require_bot(request)
+    return web.json_response({"commands": _claim_commands()})
 
 async def bot_result(request):
     _require_bot(request)
