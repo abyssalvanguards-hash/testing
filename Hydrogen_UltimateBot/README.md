@@ -234,3 +234,14 @@ The web panel is a separate, optional service under `web_panel/`. It is not need
 - Use HTTPS and unique random values for `PANEL_SHARED_SECRET` and `PANEL_SESSION_SECRET`. Never reuse your Discord bot token or Gemini API key.
 
 The panel is intentionally separate so a panel outage cannot prevent the Discord bot from starting or handling Discord events.
+
+
+## Server care and backups
+
+- `/busy 2d` enables an owner-controlled server-care status for up to 30 days. Use `/busystatus` to check it and `/busyoff` to end it early. The status expires automatically. Existing configured moderation, welcome, and logging features continue; busy mode does not grant Gemini new authority.
+- `/backup create` saves a JSON snapshot of server roles, channels, and role permission overwrites under `data/backups/<guild_id>/`.
+- `/backup list` lists recent backups.
+- `/backup restore <id>` previews missing structure. Only the actual server owner can run `/backup restore <id> CONFIRM`. Restore creates missing roles/categories/channels only; it does not edit or delete existing items.
+- Backups exclude message history, member lists, and member-role assignments. Restore may stop partway if Discord permissions or role hierarchy prevent an operation.
+
+The web panel currently supports owner login, request submission/history, and a limited bot connector. The connector currently handles server-status requests; other panel actions are explicitly not enabled until their approval workflows are complete.
