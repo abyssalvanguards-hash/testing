@@ -93,7 +93,7 @@ async def _discord_json(session, method, url, token=None, **kwargs):
 
 
 async def health(_request):
-    return web.json_response({"service": "Hydrogen Panel", "status": "ok"})
+    return web.json_response({"service": "WardenX Manager Panel", "status": "ok"})
 
 
 async def login(request):
@@ -161,18 +161,18 @@ async def index(request):
     user = _session(request)
     if not user:
         return web.Response(text="""<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'>
-<title>Hydrogen Panel</title><main style='font:16px system-ui;max-width:620px;margin:12vh auto;padding:24px'>
-<h1>Hydrogen Control Panel</h1><p>Sign in with Discord to manage servers you own.</p>
+<title>WardenX Manager Panel</title><main style='font:16px system-ui;max-width:620px;margin:12vh auto;padding:24px'>
+<h1>WardenX Manager Control Panel</h1><p>Sign in with Discord to manage servers you own.</p>
 <a href='/login'>Continue with Discord</a></main>""", content_type="text/html")
     guilds = "".join(f"<option value='{g}'>{g}</option>" for g in user["guilds"])
     if not guilds:
         return web.Response(
-            text=f"<main><h1>Hydrogen Control Panel</h1><p>Signed in as {html.escape(user['name'])}</p><p>No Discord servers owned by this account were found. Only server owners can use this panel.</p><a href='/logout'>Sign out</a></main>",
+            text=f"<main><h1>WardenX Manager Control Panel</h1><p>Signed in as {html.escape(user['name'])}</p><p>No Discord servers owned by this account were found. Only server owners can use this panel.</p><a href='/logout'>Sign out</a></main>",
             content_type="text/html"
         )
     return web.Response(text=f"""<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'>
-<title>Hydrogen Panel</title><main style='font:16px system-ui;max-width:680px;margin:5vh auto;padding:20px'>
-<h1>Hydrogen Control Panel</h1><p>Signed in as {html.escape(user['name'])}</p>
+<title>WardenX Manager Panel</title><main style='font:16px system-ui;max-width:680px;margin:5vh auto;padding:20px'>
+<h1>WardenX Manager Control Panel</h1><p>Signed in as {html.escape(user['name'])}</p>
 <form id=f><input type=hidden id=csrf value='{user['csrf']}'><label>Server you own <select id=g required>{guilds}</select></label>
 <p><label>Gemini instruction <textarea id=c maxlength=1500 required style='display:block;width:100%;min-height:110px'></textarea></label></p>
 <button>Queue request</button></form><pre id=o></pre><h2>Recent requests</h2><div id=historyList>Loading...</div><p><a href='/logout'>Sign out</a></p>
