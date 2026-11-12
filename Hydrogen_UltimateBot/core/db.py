@@ -3,7 +3,7 @@ from config import DB_PATH, DATA_DIR
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS guild_settings (
- guild_id INTEGER PRIMARY KEY, prefix TEXT DEFAULT '!',
+ guild_id INTEGER PRIMARY KEY, prefix TEXT DEFAULT '$',
  log_channel_id INTEGER, review_channel_id INTEGER,
  staff_role_id INTEGER, admin_role_id INTEGER, mod_role_id INTEGER,
  welcome_channel_id INTEGER, goodbye_channel_id INTEGER,
@@ -53,7 +53,8 @@ CREATE TABLE IF NOT EXISTS invite_counts (
 CREATE TABLE IF NOT EXISTS invoices (
  id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id INTEGER NOT NULL,
  user_id INTEGER NOT NULL, method TEXT NOT NULL, amount REAL NOT NULL,
- reference TEXT, status TEXT DEFAULT 'pending', created_at TEXT NOT NULL
+ reference TEXT, status TEXT DEFAULT 'pending', created_at TEXT NOT NULL,
+ txid TEXT, confirmations INTEGER DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS audit_events (
  id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id INTEGER,
@@ -77,10 +78,14 @@ async def init_db():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     async with aiosqlite.connect(DB_PATH) as db:
         await db.executescript(SCHEMA)
-        # Safe additive migrations for databases created by earlier Hydrogen builds.
+        # Upgrade old built-in prefix values without overriding custom prefixes.
+        await db.execute("UPDATE guild_settings SET prefix=? WHERE prefix=?", ("$", "!"))
+        # Safe additive migrations for existing databases.
         cols = {row[1] for row in await (await db.execute("PRAGMA table_info(invoices)")).fetchall()}
-        if "txid" not in cols: await db.execute("ALTER TABLE invoices ADD COLUMN txid TEXT")
-        if "confirmations" not in cols: await db.execute("ALTER TABLE invoices ADD COLUMN confirmations INTEGER DEFAULT 0")
+        if "txid" not in cols:
+            await db.execute("ALTER TABLE invoices ADD COLUMN txid TEXT")
+        if "confirmations" not in cols:
+            await db.execute("ALTER TABLE invoices ADD COLUMN confirmations INTEGER DEFAULT 0")
         await db.commit()
 
 async def execute(query, params=()):
@@ -112,10 +117,10 @@ async def get_setting(guild_id, key, default=None):
 
 async def set_setting(guild_id, key, value):
     allowed = {
-        "prefix","log_channel_id","review_channel_id","staff_role_id",
-        "admin_role_id","mod_role_id","welcome_channel_id","goodbye_channel_id",
-        "ticket_transcript_channel_id","excluded_category_id","upi_id","upi_payee",
-        "ltc_address","btc_address","channel_template"
+        "prefix", "log_channel_id", "review_channel_id", "staff_role_id",
+        "admin_role_id", "mod_role_id", "welcome_channel_id", "goodbye_channel_id",
+        "ticket_transcript_channel_id", "excluded_category_id", "upi_id", "upi_payee",
+        "ltc_address", "btc_address", "channel_template"
     }
     if key not in allowed:
         raise ValueError("Unsupported setting")
