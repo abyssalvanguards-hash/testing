@@ -86,7 +86,7 @@ async def open_ticket(interaction,panel_key):
         await channel.delete(reason="Ticket database insert failed")
         raise
     embed=discord.Embed(title="Support Ticket",description=f"{interaction.user.mention}, describe your issue. AI assistance is enabled when configured; staff can take over at any time.",color=discord.Color.blurple())
-    embed.set_footer(text="Hydrogen UltimateBot • Made by Hydrogen")
+    embed.set_footer(text="WardenX Manager • Developer: @h_two_")
     await channel.send(content=f"{interaction.user.mention} {role.mention}",embed=embed,view=TicketControls(interaction.client))
     await interaction.followup.send(f"Created {channel.mention}",ephemeral=True)
     await audit(interaction.client,interaction.guild,"Ticket opened",f"{channel.mention} • panel {panel_key}",interaction.user)
@@ -121,7 +121,7 @@ class TicketCog(commands.Cog):
         panel=await db.fetchone("SELECT * FROM ticket_panels WHERE guild_id=? AND panel_key=?",(ctx.guild.id,key))
         if not panel: return await ctx.reply("Panel not found.")
         e=discord.Embed(title=panel["title"],description=panel["description"],color=discord.Color.blurple())
-        e.set_footer(text="Hydrogen UltimateBot • Made by Hydrogen")
+        e.set_footer(text="WardenX Manager • Developer: @h_two_")
         await ctx.send(embed=e,view=TicketCreateView(key))
     @commands.hybrid_command(name="ticket_add")
     async def ticket_add(self,ctx,member:discord.Member):
@@ -150,7 +150,7 @@ class TicketCog(commands.Cog):
         history=[]
         async for m in message.channel.history(limit=AI_MAX_TICKET_HISTORY_MESSAGES,oldest_first=True):
             if m.content: history.append(f"{m.author.display_name}: {m.content[:800]}")
-        prompt=("You are Hydrogen support assistant. Be concise, safe, and helpful. "
+        prompt=("You are WardenX Manager support assistant. Be concise, safe, and helpful. "
                 "Never approve refunds, payments, bans, role grants, or policy exceptions. "
                 "Escalate uncertain or account-specific actions to staff.\n\n"+"\n".join(history))
         try:
