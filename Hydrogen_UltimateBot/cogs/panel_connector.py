@@ -9,6 +9,8 @@ import logging
 import os
 import aiohttp
 import discord
+from core import db
+import json
 from discord.ext import commands, tasks
 from core.security import is_server_owner_or_global
 
@@ -80,22 +82,103 @@ class PanelConnector(commands.Cog):
         normalized = command.casefold().strip()
         if normalized in {"status", "server status", "show server status"}:
             result = (
-                f"Server: {guild.name}\nMembers: {guild.member_count}\n"
-                f"Channels: {len(guild.channels)}\nRoles: {len(guild.roles)}\n"
+                f"Server: {guild.name}\\nMembers: {guild.member_count}\\n"
+                f"Channels: {len(guild.channels)}\\nRoles: {len(guild.roles)}\\n"
                 f"Hydrogen: online"
             )
             await self._report(command_id, "completed", result)
             return
 
-        # Do not allow free-form text to become a Discord action. The next
-        # implementation stage adds allow-listed Gemini plans and owner approval.
-        await self._report(
-            command_id, "needs_confirmation",
-            "This request is queued safely, but this action is not enabled yet. "
-            "Only server status is currently supported by the panel connector. "
-            "Server changes, busy mode, and backups will be enabled after their "
-            "preview, owner-confirmation, and restore safeguards are implemented."
-        )
+        # Ask Gemini only to classify the request into a tiny allow-list.
+        # AI output never becomes executable code or an arbitrary Discord action.
+        try:
+            raw = await self.bot.ai.ask(
+                "Classify the user's Discord server request. Return ONLY JSON "
+                "with one key action, whose value is exactly one of: "
+                "restructure, permissions, busy_status, backup_list, unsupported. "
+                "Use restructure for proposed channel/category organization; "
+                "permissions for least-privilege channel-role review; busy_status "
+                "for checking server-care mode; backup_list for listing backups. "
+                "Anything else is unsupported. User request: " + command[:1500],
+                guild_id=guild.id, user_id=user_id, purpose="panel_intent"
+            )
+            import json, re
+            raw = re.sub(r"^\x60\x60\x60(?:json)?\\s*|\\s*\x60\x60\x60$", "", raw.strip(), flags=re.I)
+            parsed = json.loads(raw[raw.find("{"):raw.rfind("}") + 1])
+            action = parsed.get("action") if isinstance(parsed, dict) else "unsupported"
+        except Exception as exc:
+            await self._report(command_id, "failed", f"Gemini could not classify this request: {type(exc).__name__}.")
+            return
+
+        if action == "busy_status":
+            row = await db.fetchone("SELECT expires_at FROM busy_states WHERE guild_id=?", (guild.id,))
+            result = "Server-care mode is off." if not row else f"Server-care mode expiry: {row['expires_at']}."
+            await self._report(command_id, "completed", result)
+            return
+        if action == "backup_list":
+            rows = await db.fetchall("SELECT id,created_at,description FROM server_backups WHERE guild_id=? ORDER BY id DESC LIMIT 10", (guild.id,))
+            result = "\\n".join(f"#{r['id']} • {r['created_at']} • {r['description'] or 'Server structure'}" for r in rows) or "No backups found."
+            await self._report(command_id, "completed", result)
+            return
+        if action in {"restructure", "permissions"}:
+            try:
+                from cogs.ai_server_manager import AIServerManager
+                manager = self.bot.get_cog("AIServerManager")
+                if manager is None:
+                    raise RuntimeError("AI server manager is not loaded")
+                scan = await manager._scan(guild)
+                if action == "restructure":
+                    prompt = ("Return ONLY JSON with keys summary, categories (array of category names), "
+                              "channels (array of {name,category}), rename (array of {channel_id,new_name}). "
+                              "Suggest create/rename only; never delete. Names <=90 chars. Snapshot: "
+                              + json.dumps(scan, ensure_ascii=False))
+                else:
+                    prompt = ("Return ONLY JSON with keys summary and changes [{channel,role,allow,deny}]. "
+                              "Use existing names only and only these permissions: "
+                              + ", ".join(sorted(__import__("cogs.ai_server_manager", fromlist=["ALLOWED_PERMS"]).ALLOWED_PERMS))
+                              + ". Never grant administrator or manage_guild. Snapshot: "
+                              + json.dumps(scan, ensure_ascii=False))
+                plan = manager._parse_json(await self.bot.ai.ask(
+                    prompt, guild_id=guild.id, user_id=user_id, purpose="panel_" + action
+                ))
+                if action == "restructure":
+                    clean = {"summary": str(plan.get("summary", "Proposed server organization"))[:500], "categories": [], "channels": [], "rename": []}
+                    for name in plan.get("categories", [])[:20]:
+                        if isinstance(name, str) and name.strip(): clean["categories"].append(name.strip()[:90])
+                    for item in plan.get("channels", [])[:60]:
+                        if isinstance(item, dict) and isinstance(item.get("name"), str) and isinstance(item.get("category"), str):
+                            clean["channels"].append({"name": item["name"][:90], "category": item["category"][:90]})
+                    valid_ids = {ch.id for ch in guild.channels}
+                    for item in plan.get("rename", [])[:30]:
+                        if isinstance(item, dict) and str(item.get("channel_id", "")).isdigit() and int(item["channel_id"]) in valid_ids and isinstance(item.get("new_name"), str):
+                            clean["rename"].append({"channel_id": int(item["channel_id"]), "new_name": item["new_name"][:90]})
+                else:
+                    from cogs.ai_server_manager import ALLOWED_PERMS
+                    clean = {"summary": str(plan.get("summary", "Least-privilege permission review"))[:500], "changes": []}
+                    for item in plan.get("changes", [])[:60]:
+                        if not isinstance(item, dict): continue
+                        channel = discord.utils.get(guild.channels, name=str(item.get("channel", "")))
+                        role = discord.utils.get(guild.roles, name=str(item.get("role", "")))
+                        if not channel or not role or role.is_default() or role.managed: continue
+                        allow = sorted(set(item.get("allow", [])) & ALLOWED_PERMS)
+                        deny = sorted(set(item.get("deny", [])) & ALLOWED_PERMS)
+                        clean["changes"].append({"channel_id": channel.id, "channel": channel.name, "role_id": role.id, "role": role.name, "allow": allow, "deny": deny})
+                cur = await db.execute(
+                    "INSERT INTO server_change_plans(guild_id,created_by,kind,payload,status,created_at) VALUES(?,?,?,?, 'pending', datetime('now'))",
+                    (guild.id, user_id, action, json.dumps(clean, ensure_ascii=False))
+                )
+                await self._report(command_id, "needs_confirmation",
+                    f"Gemini prepared preview plan #{cur.lastrowid}: {clean['summary']}\\n"
+                    f"Review in Discord with /showplan {cur.lastrowid}. Nothing has changed. "
+                    f"Only the actual server owner can apply it using /applyplan {cur.lastrowid} CONFIRM.")
+                return
+            except Exception as exc:
+                log.exception("Panel Gemini plan creation failed")
+                await self._report(command_id, "failed", f"Could not create a safe plan: {type(exc).__name__}.")
+                return
+
+        await self._report(command_id, "rejected",
+            "That request is outside the panel's supported actions. Supported: server status, server restructuring plan, permission review plan, busy-mode status, and backup list. No changes were made.")
 
     @tasks.loop(seconds=45)
     async def poll_panel(self):
