@@ -69,3 +69,40 @@ def test_backup_payload_rejects_negative_permission_bits():
     }
     with pytest.raises(ValueError):
         validate_backup_payload(payload, 123)
+
+
+
+def test_backup_payload_rejects_duplicate_names_and_invalid_category_reference():
+    duplicate_roles = {
+        "format": 1, "guild_id": "123",
+        "roles": [{"name": "Staff"}, {"name": "Staff"}],
+        "channels": [],
+    }
+    with pytest.raises(ValueError):
+        validate_backup_payload(duplicate_roles, 123)
+
+    invalid_category = {
+        "format": 1, "guild_id": "123", "roles": [],
+        "channels": [{
+            "name": "general", "type": "text", "category": [],
+            "overwrites": [],
+        }],
+    }
+    with pytest.raises(ValueError):
+        validate_backup_payload(invalid_category, 123)
+
+
+def test_backup_payload_rejects_oversized_collections_and_bad_boolean_types():
+    oversized = {
+        "format": 1, "guild_id": "123", "roles": [],
+        "channels": [{"name": f"channel-{i}", "type": "text"} for i in range(501)],
+    }
+    with pytest.raises(ValueError):
+        validate_backup_payload(oversized, 123)
+
+    invalid_boolean = {
+        "format": 1, "guild_id": "123", "roles": [],
+        "channels": [{"name": "general", "type": "text", "nsfw": 1}],
+    }
+    with pytest.raises(ValueError):
+        validate_backup_payload(invalid_boolean, 123)
