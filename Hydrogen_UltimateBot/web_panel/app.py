@@ -154,6 +154,11 @@ async def index(request):
 <h1>Hydrogen Control Panel</h1><p>Sign in with Discord to manage servers you own.</p>
 <a href='/login'>Continue with Discord</a></main>""", content_type="text/html")
     guilds = "".join(f"<option value='{g}'>{g}</option>" for g in user["guilds"])
+    if not guilds:
+        return web.Response(
+            text=f"<main><h1>Hydrogen Control Panel</h1><p>Signed in as {html.escape(user['name'])}</p><p>No Discord servers owned by this account were found. Only server owners can use this panel.</p><a href='/logout'>Sign out</a></main>",
+            content_type="text/html"
+        )
     return web.Response(text=f"""<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'>
 <title>Hydrogen Panel</title><main style='font:16px system-ui;max-width:680px;margin:5vh auto;padding:20px'>
 <h1>Hydrogen Control Panel</h1><p>Signed in as {html.escape(user['name'])}</p>
