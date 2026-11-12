@@ -43,6 +43,7 @@ class AIServerManager(commands.Cog):
     async def ai_restructure(self, ctx):
         if not await is_server_owner_or_global(ctx.author, self.bot.owner_ids):
             return await ctx.reply("Only the server owner or configured WardenX Manager owner can request a restructuring plan.")
+        await ctx.defer()
         scan = await self._scan(ctx.guild)
         prompt = ("You are planning a Discord server structure. Return ONLY JSON with keys summary, categories (array of category names), "
                   "channels (array of objects with name and category), and rename (array of objects with channel_id and new_name). "
@@ -71,6 +72,7 @@ class AIServerManager(commands.Cog):
     async def ai_permissions(self, ctx):
         if not await is_server_owner_or_global(ctx.author, self.bot.owner_ids):
             return await ctx.reply("Only the server owner or configured WardenX Manager owner can request a permission plan.")
+        await ctx.defer()
         scan = await self._scan(ctx.guild)
         prompt = ("Review this Discord server snapshot and propose least-privilege permission overwrites. Return ONLY JSON: "
                   "{summary, changes:[{channel, role, allow:[permission_names], deny:[permission_names]}]}. "
