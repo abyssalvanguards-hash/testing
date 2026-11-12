@@ -98,7 +98,15 @@ async def login(request):
     if not all((CLIENT_ID, CLIENT_SECRET, REDIRECT_URI, SESSION_SECRET)) or len(SESSION_SECRET) < 32:
         raise web.HTTPServiceUnavailable(text="Discord OAuth2 is not configured or PANEL_SESSION_SECRET is too short (minimum 32 characters).")
     state = secrets.token_urlsafe(32)
-    _pending_oauth[state] = time.time() + 300
+    now = time.time()
+    # Bound transient OAuth state so abandoned login attempts cannot grow memory indefinitely.
+    for key, expiry in list(_pending_oauth.items()):
+        if expiry < now:
+            _pending_oauth.pop(key, None)
+    if len(_pending_oauth) >= 500:
+        oldest = min(_pending_oauth, key=_pending_oauth.get)
+        _pending_oauth.pop(oldest, None)
+    _pending_oauth[state] = now + 300
     params = {
         "client_id": CLIENT_ID, "redirect_uri": REDIRECT_URI,
         "response_type": "code", "scope": "identify guilds",
@@ -186,9 +194,18 @@ async def enqueue(request):
         raise web.HTTPForbidden(text="You must own the selected Discord server.")
     if not guild_id.isdigit() or not command or len(command) > 1500:
         raise web.HTTPBadRequest(text="A valid server and instruction (1–1500 characters) are required.")
+    now = int(time.time())
     with _db() as conn:
+        recent = conn.execute(
+            "SELECT COUNT(*) FROM commands WHERE user_id=? AND created_at>?",
+            (user["uid"], now - 60)
+        ).fetchone()[0]
+        if recent >= 5:
+            raise web.HTTPTooManyRequests(
+                text="Request limit reached. Please wait a minute before sending another command."
+            )
         cur = conn.execute("INSERT INTO commands(guild_id,user_id,command,created_at) VALUES(?,?,?,?)",
-                           (guild_id, user["uid"], command, int(time.time())))
+                           (guild_id, user["uid"], command, now))
         command_id = cur.lastrowid
     return web.json_response({"id": command_id, "status": "queued"}, status=202)
 
