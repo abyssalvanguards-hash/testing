@@ -75,6 +75,15 @@ CREATE TABLE IF NOT EXISTS server_change_plans (
 CREATE TABLE IF NOT EXISTS used_payment_txids (
  txid TEXT PRIMARY KEY, invoice_id INTEGER NOT NULL, guild_id INTEGER NOT NULL, used_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS busy_states (
+ guild_id INTEGER PRIMARY KEY, owner_id INTEGER NOT NULL,
+ expires_at TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS server_backups (
+ id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id INTEGER NOT NULL,
+ created_by INTEGER NOT NULL, file_path TEXT NOT NULL,
+ created_at TEXT NOT NULL, description TEXT
+);
 CREATE TABLE IF NOT EXISTS ai_usage (
  id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id INTEGER,
  user_id INTEGER, purpose TEXT, created_at TEXT NOT NULL
