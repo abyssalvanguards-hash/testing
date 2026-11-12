@@ -13,7 +13,7 @@ import aiohttp
 import discord
 from core import db
 from discord.ext import commands, tasks
-from core.security import is_server_owner_or_global
+from core.security import is_server_owner_or_global, safe_name
 
 log = logging.getLogger(__name__)
 
@@ -148,14 +148,14 @@ class PanelConnector(commands.Cog):
                     if not all(isinstance(x, list) for x in (categories, channels, renames)):
                         raise ValueError("Gemini returned invalid restructuring fields.")
                     for name in categories[:20]:
-                        if isinstance(name, str) and name.strip(): clean["categories"].append(name.strip()[:90])
+                        if isinstance(name, str) and name.strip(): clean["categories"].append(safe_name(name.strip()[:90]))
                     for item in channels[:60]:
                         if isinstance(item, dict) and isinstance(item.get("name"), str) and isinstance(item.get("category"), str):
-                            clean["channels"].append({"name": item["name"][:90], "category": item["category"][:90]})
+                            clean["channels"].append({"name": safe_name(item["name"][:90]), "category": safe_name(item["category"][:90])})
                     valid_ids = {ch.id for ch in guild.channels}
                     for item in renames[:30]:
                         if isinstance(item, dict) and str(item.get("channel_id", "")).isdigit() and int(item["channel_id"]) in valid_ids and isinstance(item.get("new_name"), str):
-                            clean["rename"].append({"channel_id": int(item["channel_id"]), "new_name": item["new_name"][:90]})
+                            clean["rename"].append({"channel_id": int(item["channel_id"]), "new_name": safe_name(item["new_name"][:90])})
                 else:
                     from cogs.ai_server_manager import ALLOWED_PERMS
                     clean = {"summary": str(plan.get("summary", "Least-privilege permission review"))[:500], "changes": []}
@@ -171,9 +171,13 @@ class PanelConnector(commands.Cog):
                         raw_allow = item.get("allow", [])
                         raw_deny = item.get("deny", [])
                         if not isinstance(raw_allow, list) or not isinstance(raw_deny, list): continue
-                        allow = sorted(set(raw_allow) & panel_perms)
-                        deny = sorted((set(raw_deny) & panel_perms) - set(allow))
+                        allow = sorted({value for value in raw_allow if isinstance(value, str)} & panel_perms)
+                        deny = sorted(({value for value in raw_deny if isinstance(value, str)} & panel_perms) - set(allow))
                         clean["changes"].append({"channel_id": channel.id, "channel": channel.name, "role_id": role.id, "role": role.name, "allow": allow, "deny": deny})
+                if action == "restructure" and not (clean["categories"] or clean["channels"] or clean["rename"]):
+                    raise ValueError("Gemini did not produce any valid restructuring actions.")
+                if action == "permissions" and not clean["changes"]:
+                    raise ValueError("Gemini did not produce any valid permission changes.")
                 cur = await db.execute(
                     "INSERT INTO server_change_plans(guild_id,created_by,kind,payload,status,created_at) VALUES(?,?,?,?, 'pending', datetime('now'))",
                     (guild.id, user_id, action, json.dumps(clean, ensure_ascii=False))
