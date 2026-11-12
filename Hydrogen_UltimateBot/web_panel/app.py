@@ -40,8 +40,11 @@ def _db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         guild_id TEXT NOT NULL, user_id TEXT NOT NULL,
         command TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
-        created_at INTEGER NOT NULL, result TEXT
+        created_at INTEGER NOT NULL, result TEXT, delivered_at INTEGER
     )""")
+    columns = {row[1] for row in conn.execute('PRAGMA table_info(commands)').fetchall()}
+    if 'delivered_at' not in columns:
+        conn.execute('ALTER TABLE commands ADD COLUMN delivered_at INTEGER')
     conn.commit()
     return conn
 
@@ -91,8 +94,8 @@ async def health(_request):
 
 
 async def login(request):
-    if not all((CLIENT_ID, CLIENT_SECRET, REDIRECT_URI, SESSION_SECRET)):
-        raise web.HTTPServiceUnavailable(text="Discord OAuth2 is not configured.")
+    if not all((CLIENT_ID, CLIENT_SECRET, REDIRECT_URI, SESSION_SECRET)) or len(SESSION_SECRET) < 32:
+        raise web.HTTPServiceUnavailable(text="Discord OAuth2 is not configured or PANEL_SESSION_SECRET is too short (minimum 32 characters).")
     state = secrets.token_urlsafe(32)
     _pending_oauth[state] = time.time() + 300
     params = {
@@ -195,10 +198,12 @@ async def command_history(request):
 
 async def bot_commands(request):
     _require_bot(request)
+    now = int(time.time())
     with _db() as conn:
-        rows = conn.execute("SELECT id,guild_id,user_id,command FROM commands WHERE status='pending' ORDER BY id LIMIT 5").fetchall()
+        conn.execute("BEGIN IMMEDIATE")
+        rows = conn.execute("SELECT id,guild_id,user_id,command FROM commands WHERE status='pending' OR (status='delivered' AND COALESCE(delivered_at,0)<?) ORDER BY id LIMIT 5", (now - 120,)).fetchall()
         for row in rows:
-            conn.execute("UPDATE commands SET status='delivered' WHERE id=? AND status='pending'", (row["id"],))
+            conn.execute("UPDATE commands SET status='delivered',delivered_at=? WHERE id=?", (now, row["id"]))
     return web.json_response({"commands": [dict(r) for r in rows]})
 
 
@@ -235,7 +240,7 @@ def create_app():
 
 if __name__ == "__main__":
     required = (CLIENT_ID, CLIENT_SECRET, REDIRECT_URI, BOT_SECRET, SESSION_SECRET)
-    if not all(required):
-        raise SystemExit("Configure Discord OAuth2 and panel secrets before starting the panel.")
+    if not all(required) or len(SESSION_SECRET) < 32:
+        raise SystemExit("Configure Discord OAuth2 and PANEL_SESSION_SECRET (minimum 32 characters) before starting the panel.")
     web.run_app(create_app(), host=os.getenv("PANEL_HOST", "0.0.0.0"),
                 port=int(os.getenv("PANEL_PORT", "8000")))
