@@ -87,13 +87,13 @@ class ServerBuilder(commands.Cog):
             return await ctx.reply(f"{Emoji.error} Only the server owner or configured Hydrogen owner can run the server builder.")
         if not ctx.guild.me.guild_permissions.manage_channels or not ctx.guild.me.guild_permissions.manage_roles:
             return await ctx.reply(f"{Emoji.error} Hydrogen needs Manage Channels and Manage Roles permissions.")
+        await ctx.defer()
         try:
             template = self._template()
             role_permissions = await self._ai_permissions(ctx.guild, template["roles"])
         except (OSError, ValueError, AIUnavailable, AttributeError) as exc:
-            return await ctx.reply(f"{Emoji.error} AI/template preflight failed; no server changes were made. {str(exc)[:250]}")
+            return await ctx.send(f"{Emoji.error} AI/template preflight failed; no server changes were made. {str(exc)[:250]}")
 
-        await ctx.defer()
         made_roles, kept_roles, made_categories, made_channels, kept_channels = [], [], [], [], []
         roles_by_base = {}
         for base_name in template["roles"]:
