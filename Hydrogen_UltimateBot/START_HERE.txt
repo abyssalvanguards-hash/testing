@@ -1,0 +1,53 @@
+HYDROGEN ULTIMATEBOT — UPGRADED BUILD
+Made by Hydrogen
+
+1. Extract this ZIP.
+2. Open the Hydrogen_UltimateBot folder.
+3. Install Python 3.11 or newer.
+4. Run: pip install -r requirements.txt
+5. Copy private_config.example.py to private_config.py.
+6. Put your Discord bot token, owner IDs, and Gemini API key in private_config.py.
+7. Enable the required Discord Developer Portal intents (Server Members Intent and Message Content Intent).
+8. Invite the bot with only the permissions it needs. For the new server tools, Manage Channels and Manage Roles are required for the respective actions. Do not grant Administrator.
+9. Run: python main.py
+
+NEW COMMANDS
+!airestructure             Generate a preview-only AI server layout plan.
+!aipermissions             Generate a preview-only permission plan.
+!showplan <id>             Inspect a plan before applying it.
+!applyplan <id> CONFIRM    Apply a pending plan; actual server owner only.
+!paymentcheck <id> <txid>  Verify BTC/LTC transaction against invoice/address.
+
+SAFETY
+- AI plans do not change anything until the server owner explicitly confirms.
+- No channels/categories are deleted by the restructuring module.
+- Dangerous permissions such as Administrator are not allowed by the permission planner.
+- BTC/LTC verification requires the configured receiving address, matching amount, and at least 2 confirmations. UPI remains manually verified.
+- Back up data/hydrogen.db before upgrading an existing installation.
+- Keep private_config.py private. Never share it or upload it publicly.
+
+Read README.md for detailed setup, limitations, and payment-verification notes.
+
+
+SLASH + PREFIX COMMANDS
+- Hydrogen supports both slash commands and prefix commands.
+- Use /help or !help to view the command list.
+- Slash commands are synced to each server when the bot starts.
+- Invite the bot with the bot and applications.commands OAuth2 scopes.
+- The bot must be online and finish startup before slash commands appear.
+
+GEMINI TROUBLESHOOTING
+- Set GEMINI_API_KEYS in private_config.py to a Python list of valid Gemini API keys.
+- Optional: set GEMINI_MODEL = "gemini-3.8-flash".
+- AI errors now include the Gemini HTTP status and provider message (without printing the API key).
+- HTTP 400 usually means invalid request/key/model configuration; HTTP 403 means access/restriction; HTTP 429 means quota/rate limit.
+- Hydrogen uses the first configured key and does not rotate keys to bypass quotas.
+
+
+GEMINI KEY MANAGEMENT
+- Add your independently configured Gemini API keys to GEMINI_API_KEYS in private_config.py.
+- Use /gemini keys (or !gemini keys) to list masked key numbers.
+- Use /gemini switch 2 (or !gemini switch 2) to select key 2.
+- Use /gemini status and /gemini test to inspect/test the selected key.
+- Only IDs in OWNER_IDS can manage keys. The selection is saved in data/gemini_selection.json.
+- Keys are never displayed in full. Switching is manual; quota errors do not trigger automatic rotation.

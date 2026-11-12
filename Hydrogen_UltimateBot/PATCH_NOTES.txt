@@ -1,0 +1,18 @@
+HYDROGEN ULTIMATEBOT - PATCH NOTES
+
+This build fixes the startup exception in cogs/tickets.py:
+- TicketControls now accepts an optional bot argument.
+- The bot reference is stored before persistent controls are registered.
+- Both newly-created ticket views and startup persistent views use the same constructor.
+
+Validation performed for this package:
+- All Python files compile with the Python interpreter used for packaging.
+- ZIP archive integrity checked after creation.
+
+Important limitations:
+- This is a source-level/static validation, not a live Discord test.
+- Keep your existing private_config.py and data/hydrogen.db when replacing files.
+- Do not upload private_config.py into a public/shared archive.
+- PyNaCl and davey warnings only affect optional voice support; Hydrogen's text commands do not require them.
+
+Gemini key management added: /gemini status, keys, switch, test and matching prefix subcommands. Selection persists across restarts; owner-only; keys masked; no automatic quota rotation.
