@@ -83,8 +83,8 @@ class PanelConnector(commands.Cog):
         normalized = command.casefold().strip()
         if normalized in {"status", "server status", "show server status"}:
             result = (
-                f"Server: {guild.name}\nMembers: {guild.member_count}\\n"
-                f"Channels: {len(guild.channels)}\\nRoles: {len(guild.roles)}\\n"
+                f"Server: {guild.name}\nMembers: {guild.member_count}\n"
+                f"Channels: {len(guild.channels)}\nRoles: {len(guild.roles)}\n"
                 f"Hydrogen: online"
             )
             await self._report(command_id, "completed", result)
@@ -103,7 +103,7 @@ class PanelConnector(commands.Cog):
                 "Anything else is unsupported. User request: " + command[:1500],
                 guild_id=guild.id, user_id=user_id, purpose="panel_intent"
             )
-            raw = re.sub(r"^\x60\x60\x60(?:json)?\s*|\\s*\x60\x60\x60$", "", raw.strip(), flags=re.I)
+            raw = re.sub(r"^\x60\x60\x60(?:json)?\s*|\s*\x60\x60\x60$", "", raw.strip(), flags=re.I)
             parsed = json.loads(raw[raw.find("{"):raw.rfind("}") + 1])
             action = parsed.get("action") if isinstance(parsed, dict) else "unsupported"
         except Exception as exc:
@@ -117,12 +117,11 @@ class PanelConnector(commands.Cog):
             return
         if action == "backup_list":
             rows = await db.fetchall("SELECT id,created_at,description FROM server_backups WHERE guild_id=? ORDER BY id DESC LIMIT 10", (guild.id,))
-            result = "\\n".join(f"#{r['id']} • {r['created_at']} • {r['description'] or 'Server structure'}" for r in rows) or "No backups found."
+            result = "\n".join(f"#{r['id']} • {r['created_at']} • {r['description'] or 'Server structure'}" for r in rows) or "No backups found."
             await self._report(command_id, "completed", result)
             return
         if action in {"restructure", "permissions"}:
             try:
-                from cogs.ai_server_manager import AIServerManager
                 manager = self.bot.get_cog("AIServerManager")
                 if manager is None:
                     raise RuntimeError("AI server manager is not loaded")
@@ -168,7 +167,7 @@ class PanelConnector(commands.Cog):
                     (guild.id, user_id, action, json.dumps(clean, ensure_ascii=False))
                 )
                 await self._report(command_id, "needs_confirmation",
-                    f"Gemini prepared preview plan #{cur.lastrowid}: {clean['summary']}\\n"
+                    f"Gemini prepared preview plan #{cur.lastrowid}: {clean['summary']}\n"
                     f"Review in Discord with /showplan {cur.lastrowid}. Nothing has changed. "
                     f"Only the actual server owner can apply it using /applyplan {cur.lastrowid} CONFIRM.")
                 return
