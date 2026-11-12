@@ -1,6 +1,6 @@
 # Optional Hydrogen Web Panel
 
-The web panel is an optional companion service. It is **not required** to run Hydrogen UltimateBot.
+The web panel is an optional companion service. It is **not required** to run WardenX Manager.
 
 ## Deployment model
 
