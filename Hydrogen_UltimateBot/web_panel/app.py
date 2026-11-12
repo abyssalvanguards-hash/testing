@@ -156,9 +156,9 @@ async def index(request):
 <h1>Hydrogen Control Panel</h1><p>Signed in as {html.escape(user['name'])}</p>
 <form id=f><input type=hidden id=csrf value='{user['csrf']}'><label>Server you own <select id=g required>{guilds}</select></label>
 <p><label>Gemini instruction <textarea id=c maxlength=1500 required style='display:block;width:100%;min-height:110px'></textarea></label></p>
-<button>Queue request</button></form><pre id=o></pre><h2>Recent requests</h2><div id=history>Loading...</div><p><a href='/logout'>Sign out</a></p>
+<button>Queue request</button></form><pre id=o></pre><h2>Recent requests</h2><div id=historyList>Loading...</div><p><a href='/logout'>Sign out</a></p>
 <script>
-f.onsubmit=async e=>{{e.preventDefault();let r=await fetch('/api/commands',{{method:'POST',headers:{{'Content-Type':'application/json','X-CSRF-Token':csrf.value}},body:JSON.stringify({{guild_id:g.value,command:c.value}})}});o.textContent=await r.text();loadHistory();}};\nasync function loadHistory(){{let r=await fetch('/api/commands?guild_id='+encodeURIComponent(g.value));if(!r.ok)return;let d=await r.json();history.textContent=d.commands.map(x=>'#'+x.id+' | '+x.status+' | '+(x.result||x.command)).join('\\n')||'No requests yet';}}loadHistory();
+f.onsubmit=async e=>{{e.preventDefault();let r=await fetch('/api/commands',{{method:'POST',headers:{{'Content-Type':'application/json','X-CSRF-Token':csrf.value}},body:JSON.stringify({{guild_id:g.value,command:c.value}})}});o.textContent=await r.text();loadHistory();}};\nasync function loadHistory(){{let r=await fetch('/api/commands?guild_id='+encodeURIComponent(g.value));if(!r.ok)return;let d=await r.json();historyList.textContent=d.commands.map(x=>'#'+x.id+' | '+x.status+' | '+(x.result||x.command)).join('\\n')||'No requests yet';}}loadHistory();setInterval(loadHistory,15000);
 </script></main>""", content_type="text/html")
 
 
