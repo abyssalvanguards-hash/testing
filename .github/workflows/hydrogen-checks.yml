@@ -1,0 +1,55 @@
+name: Hydrogen static checks
+
+on:
+  pull_request:
+    paths:
+      - "Hydrogen_UltimateBot/**"
+      - ".github/workflows/hydrogen-checks.yml"
+  push:
+    branches:
+      - "hydrogen/multiguild-server-builder"
+    paths:
+      - "Hydrogen_UltimateBot/**"
+      - ".github/workflows/hydrogen-checks.yml"
+
+jobs:
+  compile-and-validate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13", "3.14"]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Compile Python source
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import py_compile
+
+          root = Path("Hydrogen_UltimateBot")
+          files = sorted(root.rglob("*.py"))
+          if not files:
+              raise SystemExit("No Python files found")
+          for path in files:
+              py_compile.compile(str(path), doraise=True)
+          print(f"Compiled {len(files)} Python files successfully")
+          PY
+      - name: Validate JSON configuration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          root = Path("Hydrogen_UltimateBot")
+          files = sorted(root.rglob("*.json"))
+          for path in files:
+              with path.open(encoding="utf-8") as handle:
+                  json.load(handle)
+          print(f"Validated {len(files)} JSON files successfully")
+          PY
