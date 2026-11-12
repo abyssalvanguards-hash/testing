@@ -156,9 +156,9 @@ async def index(request):
 <h1>Hydrogen Control Panel</h1><p>Signed in as {html.escape(user['name'])}</p>
 <form id=f><input type=hidden id=csrf value='{user['csrf']}'><label>Server you own <select id=g required>{guilds}</select></label>
 <p><label>Gemini instruction <textarea id=c maxlength=1500 required style='display:block;width:100%;min-height:110px'></textarea></label></p>
-<button>Queue request</button></form><pre id=o></pre><p><a href='/logout'>Sign out</a></p>
+<button>Queue request</button></form><pre id=o></pre><h2>Recent requests</h2><div id=history>Loading...</div><p><a href='/logout'>Sign out</a></p>
 <script>
-f.onsubmit=async e=>{{e.preventDefault();let r=await fetch('/api/commands',{{method:'POST',headers:{{'Content-Type':'application/json','X-CSRF-Token':csrf.value}},body:JSON.stringify({{guild_id:g.value,command:c.value}})}});o.textContent=await r.text();}};
+f.onsubmit=async e=>{{e.preventDefault();let r=await fetch('/api/commands',{{method:'POST',headers:{{'Content-Type':'application/json','X-CSRF-Token':csrf.value}},body:JSON.stringify({{guild_id:g.value,command:c.value}})}});o.textContent=await r.text();loadHistory();}};\nasync function loadHistory(){{let r=await fetch('/api/commands?guild_id='+encodeURIComponent(g.value));if(!r.ok)return;let d=await r.json();history.textContent=d.commands.map(x=>'#'+x.id+' | '+x.status+' | '+(x.result||x.command)).join('\\n')||'No requests yet';}}loadHistory();
 </script></main>""", content_type="text/html")
 
 
@@ -182,6 +182,15 @@ async def enqueue(request):
         command_id = cur.lastrowid
     return web.json_response({"id": command_id, "status": "queued"}, status=202)
 
+
+async def command_history(request):
+    user = _require_session(request)
+    guild_id = request.query.get('guild_id', '')
+    if guild_id not in user['guilds']:
+        raise web.HTTPForbidden(text='You must own the selected Discord server.')
+    with _db() as conn:
+        rows = conn.execute('SELECT id,command,status,created_at,result FROM commands WHERE guild_id=? ORDER BY id DESC LIMIT 20', (guild_id,)).fetchall()
+    return web.json_response({'commands': [dict(r) for r in rows]})
 
 async def bot_commands(request):
     _require_bot(request)
@@ -217,6 +226,7 @@ def create_app():
     app.router.add_get("/callback", callback)
     app.router.add_get("/logout", logout)
     app.router.add_post("/api/commands", enqueue)
+    app.router.add_get("/api/commands", command_history)
     app.router.add_get("/api/bot/commands", bot_commands)
     app.router.add_post("/api/bot/result", bot_result)
     return app
