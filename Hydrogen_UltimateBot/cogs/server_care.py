@@ -11,6 +11,42 @@ from core.security import is_server_owner_or_global
 BASE = Path(__file__).resolve().parents[1]
 BACKUP_DIR = BASE / "data" / "backups"
 
+def validate_backup_payload(payload, guild_id):
+    """Validate the backup structure before any Discord API operation."""
+    if not isinstance(payload, dict) or payload.get("format") != 1:
+        raise ValueError("Unsupported backup format.")
+    if str(payload.get("guild_id")) != str(guild_id):
+        raise ValueError("Backup belongs to a different server.")
+    roles = payload.get("roles")
+    channels = payload.get("channels")
+    if not isinstance(roles, list) or not isinstance(channels, list):
+        raise ValueError("Backup roles or channels are malformed.")
+    for role in roles:
+        if not isinstance(role, dict) or not isinstance(role.get("name"), str) or not role["name"].strip():
+            raise ValueError("Backup contains an invalid role entry.")
+        for key in ("permissions", "color"):
+            if key in role and (not isinstance(role[key], int) or role[key] < 0):
+                raise ValueError("Backup contains invalid role settings.")
+    for channel in channels:
+        if not isinstance(channel, dict) or channel.get("type") not in {"category", "text", "voice"}:
+            raise ValueError("Backup contains an unsupported channel entry.")
+        if not isinstance(channel.get("name"), str) or not channel["name"].strip():
+            raise ValueError("Backup contains an invalid channel name.")
+        overwrites = channel.get("overwrites", [])
+        if not isinstance(overwrites, list):
+            raise ValueError("Backup channel overwrites are malformed.")
+        for overwrite in overwrites:
+            if (not isinstance(overwrite, dict)
+                    or overwrite.get("target_type") != "role"
+                    or not isinstance(overwrite.get("target_name"), str)
+                    or not isinstance(overwrite.get("allow", 0), int)
+                    or not isinstance(overwrite.get("deny", 0), int)
+                    or overwrite.get("allow", 0) < 0
+                    or overwrite.get("deny", 0) < 0):
+                raise ValueError("Backup contains an invalid permission overwrite.")
+    return roles, channels
+
+
 def parse_duration(value):
     match = re.fullmatch(r"([1-9][0-9]?)(h|d)", str(value).strip().lower())
     if not match:
@@ -153,16 +189,16 @@ class ServerCare(commands.Cog):
             return await ctx.reply("Backup file is missing or its path is invalid.")
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-            if payload.get("format") != 1 or str(payload.get("guild_id")) != str(ctx.guild.id):
-                raise ValueError("Backup format or server ID does not match.")
+            roles, channels = validate_backup_payload(payload, ctx.guild.id)
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             return await ctx.reply(f"Could not read this backup: {str(exc)[:180]}")
-        missing_roles = [x for x in payload.get("roles", []) if not discord.utils.get(ctx.guild.roles, name=x.get("name"))]
-        missing_categories = [x for x in payload.get("channels", []) if x.get("type") == "category" and not discord.utils.get(ctx.guild.categories, name=x.get("name"))]
-        missing_channels = [x for x in payload.get("channels", []) if x.get("type") in {"text", "voice"} and not discord.utils.get(ctx.guild.channels, name=x.get("name"))]
+        missing_roles = [x for x in roles if not discord.utils.get(ctx.guild.roles, name=x["name"])]
+        missing_categories = [x for x in channels if x["type"] == "category" and not discord.utils.get(ctx.guild.categories, name=x["name"])]
+        missing_channels = [x for x in channels if x["type"] in {"text", "voice"} and not discord.utils.get(ctx.guild.channels, name=x["name"])]
         preview = (f"Backup #{backup_id}: create {len(missing_roles)} roles, {len(missing_categories)} categories, and {len(missing_channels)} channels. Existing items will be left unchanged; nothing will be deleted. Message history and member assignments cannot be restored. To proceed, run /backup restore {backup_id} CONFIRM.")
         if confirmation != "CONFIRM": return await ctx.reply(preview)
-        if not ctx.guild.me.guild_permissions.manage_roles or not ctx.guild.me.guild_permissions.manage_channels:
+        bot_member = ctx.guild.me
+        if bot_member is None or not bot_member.guild_permissions.manage_roles or not bot_member.guild_permissions.manage_channels:
             return await ctx.reply("Hydrogen needs Manage Roles and Manage Channels permissions to restore this structure.")
         try:
             role_map = {r.name: r for r in ctx.guild.roles}
