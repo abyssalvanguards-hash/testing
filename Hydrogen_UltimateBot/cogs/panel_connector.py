@@ -66,6 +66,7 @@ class PanelConnector(commands.Cog):
         except ValueError:
             self.interval = 45
         self._session = None
+        self._claim_tokens = {}
         if self.enabled and self.base_url.startswith("https://") and self.secret:
             self.poll_panel.change_interval(seconds=self.interval)
             self.poll_panel.start()
@@ -91,15 +92,20 @@ class PanelConnector(commands.Cog):
         try:
             async with session.post(
                 self.base_url + "/api/bot/result",
-                json={"id": command_id, "status": status, "result": str(result)[:1200]},
+                json={"id": command_id, "claim_token": self._claim_tokens.get(command_id, ""), "status": status, "result": str(result)[:1200]},
             ) as response:
                 if response.status >= 400:
                     log.warning("Panel result update failed: HTTP %s", response.status)
+                else:
+                    self._claim_tokens.pop(command_id, None)
         except (aiohttp.ClientError, asyncio.TimeoutError):
             log.warning("Could not report panel command result; will continue polling.")
 
     async def _handle(self, item):
         command_id = int(item.get("id", 0))
+        token = item.get("claim_token")
+        if isinstance(token, str) and token:
+            self._claim_tokens[command_id] = token
         guild_id = int(item.get("guild_id", 0))
         user_id = int(item.get("user_id", 0))
         command = str(item.get("command", "")).strip()
