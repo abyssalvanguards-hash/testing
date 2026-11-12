@@ -1,6 +1,6 @@
-# Hydrogen UltimateBot
+# WardenX Manager
 
-**Made by Hydrogen** — modular Discord server management bot.
+**Developer: @h_two_** — modular Discord server management bot.
 
 This is a modular, configurable project. It is not a selfbot and must be run with a Discord **bot token** created in the Discord Developer Portal. Never paste a user account token.
 
