@@ -1,8 +1,8 @@
 """Optional outbound connector for the separate Hydrogen web panel.
 
 Disabled by default. Polling is bounded and failures never stop the Discord bot.
-Only safe informational requests are handled until the confirmation workflow is
-fully wired; unsupported management requests are explicitly rejected.
+Gemini may draft allow-listed plans. Every server mutation remains behind the
+existing actual-owner Discord confirmation command.
 """
 import asyncio
 import logging
@@ -142,25 +142,37 @@ class PanelConnector(commands.Cog):
                 ))
                 if action == "restructure":
                     clean = {"summary": str(plan.get("summary", "Proposed server organization"))[:500], "categories": [], "channels": [], "rename": []}
-                    for name in plan.get("categories", [])[:20]:
+                    categories = plan.get("categories", [])
+                    channels = plan.get("channels", [])
+                    renames = plan.get("rename", [])
+                    if not all(isinstance(x, list) for x in (categories, channels, renames)):
+                        raise ValueError("Gemini returned invalid restructuring fields.")
+                    for name in categories[:20]:
                         if isinstance(name, str) and name.strip(): clean["categories"].append(name.strip()[:90])
-                    for item in plan.get("channels", [])[:60]:
+                    for item in channels[:60]:
                         if isinstance(item, dict) and isinstance(item.get("name"), str) and isinstance(item.get("category"), str):
                             clean["channels"].append({"name": item["name"][:90], "category": item["category"][:90]})
                     valid_ids = {ch.id for ch in guild.channels}
-                    for item in plan.get("rename", [])[:30]:
+                    for item in renames[:30]:
                         if isinstance(item, dict) and str(item.get("channel_id", "")).isdigit() and int(item["channel_id"]) in valid_ids and isinstance(item.get("new_name"), str):
                             clean["rename"].append({"channel_id": int(item["channel_id"]), "new_name": item["new_name"][:90]})
                 else:
                     from cogs.ai_server_manager import ALLOWED_PERMS
                     clean = {"summary": str(plan.get("summary", "Least-privilege permission review"))[:500], "changes": []}
-                    for item in plan.get("changes", [])[:60]:
+                    changes = plan.get("changes", [])
+                    if not isinstance(changes, list):
+                        raise ValueError("Gemini returned invalid permission changes.")
+                    panel_perms = {"view_channel", "send_messages", "read_message_history", "embed_links", "attach_files", "add_reactions"}
+                    for item in changes[:60]:
                         if not isinstance(item, dict): continue
                         channel = discord.utils.get(guild.channels, name=str(item.get("channel", "")))
                         role = discord.utils.get(guild.roles, name=str(item.get("role", "")))
                         if not channel or not role or role.is_default() or role.managed: continue
-                        allow = sorted(set(item.get("allow", [])) & ALLOWED_PERMS)
-                        deny = sorted(set(item.get("deny", [])) & ALLOWED_PERMS)
+                        raw_allow = item.get("allow", [])
+                        raw_deny = item.get("deny", [])
+                        if not isinstance(raw_allow, list) or not isinstance(raw_deny, list): continue
+                        allow = sorted(set(raw_allow) & panel_perms)
+                        deny = sorted((set(raw_deny) & panel_perms) - set(allow))
                         clean["changes"].append({"channel_id": channel.id, "channel": channel.name, "role_id": role.id, "role": role.name, "allow": allow, "deny": deny})
                 cur = await db.execute(
                     "INSERT INTO server_change_plans(guild_id,created_by,kind,payload,status,created_at) VALUES(?,?,?,?, 'pending', datetime('now'))",
