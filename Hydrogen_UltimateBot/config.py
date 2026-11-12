@@ -9,7 +9,8 @@ DATA_DIR = BASE_DIR / "data"
 LOG_DIR = BASE_DIR / "logs"
 DB_PATH = DATA_DIR / "hydrogen.db"
 
-DEFAULT_PREFIX = "!"
+# New default command prefix. Guilds can still override it in settings.
+DEFAULT_PREFIX = "$"
 MAX_TICKET_PANELS = 4
 MAX_OPEN_TICKETS_PER_USER = 1
 
@@ -18,7 +19,7 @@ AI_DAILY_REQUEST_LIMIT = None
 AI_RESERVED_REVIEW_REQUESTS = 10
 AI_MAX_TICKET_HISTORY_MESSAGES = 18
 
-# Moderation defaults; tune per server with !settings.
+# Moderation defaults; tune per server with $settings.
 SPAM_MESSAGE_COUNT = 7
 SPAM_WINDOW_SECONDS = 8
 SPAM_TIMEOUT_SECONDS = 60
