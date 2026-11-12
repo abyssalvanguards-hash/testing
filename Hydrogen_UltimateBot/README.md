@@ -220,3 +220,17 @@ All text commands are registered as hybrid commands: use either `/command` or yo
 
 ## Gemini API troubleshooting
 The Gemini integration uses the configured `GEMINI_MODEL` (default `gemini-3.8-flash`) and now reports the provider HTTP status and safe error detail. Check the key, Gemini API enablement, project restrictions, model name, and quota based on the returned status. Multiple configured keys are not rotated to evade quotas; the first configured key is used.
+
+
+## Optional web panel (in development)
+
+The web panel is a separate, optional service under `web_panel/`. It is not needed for normal bot operation.
+
+- The bot remains on your existing Python host; the panel can be deployed later on a web host.
+- The panel is designed for outbound bot polling, so the bot host does not need a public web port.
+- Leave `PANEL_ENABLED=false` (the default) until the bot connector is installed and the panel is deployed.
+- Panel deployment variables are documented in `web_panel/.env.example`.
+- The initial panel service provides Discord OAuth2 sign-in for server owners and a request queue. Bot-side validation, action previews, confirmations, and command-result display are still being developed; do not use it for live server changes yet.
+- Use HTTPS and unique random values for `PANEL_SHARED_SECRET` and `PANEL_SESSION_SECRET`. Never reuse your Discord bot token or Gemini API key.
+
+The panel is intentionally separate so a panel outage cannot prevent the Discord bot from starting or handling Discord events.
