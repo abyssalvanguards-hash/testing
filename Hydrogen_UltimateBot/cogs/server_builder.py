@@ -14,7 +14,7 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 TEMPLATE_PATH = BASE_DIR / "data" / "server_template.json"
 ACCESS_PATH = BASE_DIR / "data" / "channel_access.json"
 SAFE_ROLE_PERMISSIONS = {
-    "view_channel", "send_messages", "read_message_history", "embed_links",
+    "send_messages", "read_message_history", "embed_links",
     "attach_files", "add_reactions", "manage_messages", "moderate_members",
     "manage_threads", "view_audit_log"
 }
