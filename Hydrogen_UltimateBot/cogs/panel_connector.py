@@ -179,14 +179,14 @@ class PanelConnector(commands.Cog):
                     if not all(isinstance(x, list) for x in (categories, channels, renames)):
                         raise ValueError("Gemini returned invalid restructuring fields.")
                     for name in categories[:20]:
-                        if isinstance(name, str) and name.strip(): clean["categories"].append(safe_name(name.strip()[:90]))
+                        if isinstance(name, str) and name.strip(): clean["categories"].append(clean_panel_name(name))
                     for item in channels[:60]:
                         if isinstance(item, dict) and isinstance(item.get("name"), str) and isinstance(item.get("category"), str):
-                            clean["channels"].append({"name": safe_name(item["name"][:90]), "category": safe_name(item["category"][:90])})
+                            clean["channels"].append({"name": clean_panel_name(item["name"]), "category": clean_panel_name(item["category"])})
                     valid_ids = {ch.id for ch in guild.channels}
                     for item in renames[:30]:
                         if isinstance(item, dict) and str(item.get("channel_id", "")).isdigit() and int(item["channel_id"]) in valid_ids and isinstance(item.get("new_name"), str):
-                            clean["rename"].append({"channel_id": int(item["channel_id"]), "new_name": safe_name(item["new_name"][:90])})
+                            clean["rename"].append({"channel_id": int(item["channel_id"]), "new_name": clean_panel_name(item["new_name"])})
                 else:
                     from cogs.ai_server_manager import ALLOWED_PERMS
                     clean = {"summary": str(plan.get("summary", "Least-privilege permission review"))[:500], "changes": []}
@@ -202,8 +202,8 @@ class PanelConnector(commands.Cog):
                         raw_allow = item.get("allow", [])
                         raw_deny = item.get("deny", [])
                         if not isinstance(raw_allow, list) or not isinstance(raw_deny, list): continue
-                        allow = sorted({value for value in raw_allow if isinstance(value, str)} & panel_perms)
-                        deny = sorted(({value for value in raw_deny if isinstance(value, str)} & panel_perms) - set(allow))
+                        allow = clean_panel_permission_names(raw_allow)
+                        deny = sorted(set(clean_panel_permission_names(raw_deny)) - set(allow))
                         clean["changes"].append({"channel_id": channel.id, "channel": channel.name, "role_id": role.id, "role": role.name, "allow": allow, "deny": deny})
                 if action == "restructure" and not (clean["categories"] or clean["channels"] or clean["rename"]):
                     raise ValueError("Gemini did not produce any valid restructuring actions.")
