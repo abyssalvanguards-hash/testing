@@ -80,7 +80,10 @@ class ServerCare(commands.Cog):
             roles.append({"name": role.name, "permissions": role.permissions.value, "color": role.color.value, "hoist": role.hoist, "mentionable": role.mentionable, "position": role.position})
         channels = []
         for channel in guild.channels:
-            kind = "category" if isinstance(channel, discord.CategoryChannel) else "text" if isinstance(channel, discord.TextChannel) else "voice" if isinstance(channel, discord.VoiceChannel) else "stage" if isinstance(channel, discord.StageChannel) else "other"
+            # Stage and other channel types are excluded because restore only recreates categories/text/voice.
+            if not isinstance(channel, (discord.CategoryChannel, discord.TextChannel, discord.VoiceChannel)):
+                continue
+            kind = "category" if isinstance(channel, discord.CategoryChannel) else "text" if isinstance(channel, discord.TextChannel) else "voice"
             overwrites = []
             for target, overwrite in channel.overwrites.items():
                 if isinstance(target, discord.Role):
@@ -88,9 +91,9 @@ class ServerCare(commands.Cog):
                     overwrites.append({"target_type": "role", "target_name": target.name, "allow": allow.value, "deny": deny.value})
             item = {"name": channel.name, "type": kind, "position": channel.position, "category": channel.category.name if getattr(channel, "category", None) else None, "overwrites": overwrites}
             if isinstance(channel, discord.TextChannel): item.update({"topic": channel.topic, "nsfw": channel.nsfw, "slowmode_delay": channel.slowmode_delay})
-            if isinstance(channel, (discord.VoiceChannel, discord.StageChannel)): item.update({"bitrate": channel.bitrate, "user_limit": channel.user_limit})
+            if isinstance(channel, discord.VoiceChannel): item.update({"bitrate": channel.bitrate, "user_limit": channel.user_limit})
             channels.append(item)
-        return {"format": 1, "guild_id": str(guild.id), "guild_name": guild.name, "created_at": datetime.now(timezone.utc).isoformat(), "limitations": ["Message history is not included.", "Member lists and personal data are not included.", "Managed/integration roles are not included."], "roles": roles, "channels": channels}
+        return {"format": 1, "guild_id": str(guild.id), "guild_name": guild.name, "created_at": datetime.now(timezone.utc).isoformat(), "limitations": ["Message history is not included.", "Member lists and personal data are not included.", "Managed/integration roles are not included.", "Stage and other unsupported channel types are excluded."], "roles": roles, "channels": channels}
 
     @commands.hybrid_group(name="backup", invoke_without_command=True)
     async def backup(self, ctx): await ctx.reply("Use /backup create or /backup list.")
