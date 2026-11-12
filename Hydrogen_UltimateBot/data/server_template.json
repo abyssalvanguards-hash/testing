@@ -15,7 +15,7 @@
           "type": "text"
         },
         {
-          "name": "announcements",
+          "name": "announcement",
           "type": "text"
         },
         {
