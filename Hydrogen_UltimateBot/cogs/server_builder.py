@@ -19,7 +19,7 @@ SAFE_ROLE_PERMISSIONS = {
     "manage_threads", "view_audit_log",
 }
 CONFIRMATION_REQUIRED_PERMISSIONS = {"administrator", "manage_roles", "manage_channels"}
-CLASSIFICATION_ROLES = ("Hydrogen", "Bots", "Members")
+CLASSIFICATION_ROLES = ("WardenX", "Bots", "Members")
 SMALL_CAPS = str.maketrans({
     "a":"ᴀ","b":"ʙ","c":"ᴄ","d":"ᴅ","e":"ᴇ","f":"ꜰ","g":"ɢ","h":"ʜ",
     "i":"ɪ","j":"ᴊ","k":"ᴋ","l":"ʟ","m":"ᴍ","n":"ɴ","o":"ᴏ","p":"ᴘ",
@@ -104,7 +104,7 @@ class ServerBuilder(commands.Cog):
         """Assign Hydrogen, Bots, or Members based on the joining account."""
         guild = member.guild
         if self.bot.user and member.id == self.bot.user.id:
-            base_name = "Hydrogen"
+            base_name = "WardenX"
         elif member.bot:
             base_name = "Bots"
         else:
@@ -215,10 +215,10 @@ class ServerBuilder(commands.Cog):
         if not ctx.guild:
             return await ctx.reply("This command can only be used inside a server.")
         if ctx.author.id != ctx.guild.owner_id and not await is_server_owner_or_global(ctx.author, self.bot.owner_ids):
-            return await ctx.reply(f"{Emoji.error} Only the server owner or configured Hydrogen owner can run this.")
+            return await ctx.reply(f"{Emoji.error} Only the server owner or configured WardenX Manager owner can run this.")
         me = ctx.guild.me
         if not me.guild_permissions.manage_channels or not me.guild_permissions.manage_roles:
-            return await ctx.reply(f"{Emoji.error} Hydrogen needs Manage Channels and Manage Roles permissions.")
+            return await ctx.reply(f"{Emoji.error} WardenX Manager needs Manage Channels and Manage Roles permissions.")
         await ctx.defer()
         try:
             template = self._template()
@@ -263,7 +263,7 @@ class ServerBuilder(commands.Cog):
                 description=description,
                 color=discord.Color.orange()
             )
-            embed.set_footer(text="Only the server owner / configured Hydrogen owner can approve. Expires in 120 seconds.")
+            embed.set_footer(text="Only the server owner / configured WardenX Manager owner can approve. Expires in 120 seconds.")
             confirmation = RolePermissionConfirmation(ctx.author.id)
             confirmation_message = await ctx.send(embed=embed, view=confirmation)
             await confirmation.wait()
@@ -288,7 +288,7 @@ class ServerBuilder(commands.Cog):
                 setattr(perms, permission, True)
             try:
                 await ctx.guild.create_role(name=formatted, permissions=perms,
-                    reason=f"Hydrogen server builder requested by {ctx.author}")
+                    reason=f"WardenX Manager server builder requested by {ctx.author}")
                 made_roles.append(formatted)
             except discord.HTTPException:
                 continue
@@ -303,7 +303,7 @@ class ServerBuilder(commands.Cog):
             await ctx.guild.chunk(cache=True)
             for member in ctx.guild.members:
                 if self.bot.user and member.id == self.bot.user.id:
-                    base_name = "Hydrogen"
+                    base_name = "WardenX"
                 elif member.bot:
                     base_name = "Bots"
                 else:
@@ -337,7 +337,7 @@ class ServerBuilder(commands.Cog):
                 try:
                     category = await ctx.guild.create_category(
                         formatted_category, overwrites=overwrites,
-                        reason=f"Hydrogen server builder requested by {ctx.author}")
+                        reason=f"WardenX Manager server builder requested by {ctx.author}")
                     made_categories.append(formatted_category)
                 except discord.HTTPException:
                     continue
@@ -353,13 +353,13 @@ class ServerBuilder(commands.Cog):
                             overwrites={ctx.guild.default_role: discord.PermissionOverwrite(view_channel=False),
                                         me: discord.PermissionOverwrite(view_channel=True),
                                         **({verified_role: discord.PermissionOverwrite(view_channel=True)} if verified_role else {})},
-                            reason=f"Hydrogen server builder requested by {ctx.author}")
+                            reason=f"WardenX Manager server builder requested by {ctx.author}")
                     else:
                         await ctx.guild.create_text_channel(name, category=category,
                             overwrites={ctx.guild.default_role: discord.PermissionOverwrite(view_channel=False),
                                         me: discord.PermissionOverwrite(view_channel=True),
                                         **({verified_role: discord.PermissionOverwrite(view_channel=True)} if verified_role else {})},
-                            reason=f"Hydrogen server builder requested by {ctx.author}")
+                            reason=f"WardenX Manager server builder requested by {ctx.author}")
                     made_channels.append(name)
                 except discord.HTTPException:
                     continue
@@ -372,7 +372,7 @@ class ServerBuilder(commands.Cog):
             except (discord.Forbidden, discord.HTTPException, TypeError, ValueError) as exc:
                 access_note = f"Verification access update failed: {str(exc)[:180]}"
 
-        await audit(self.bot, ctx.guild, "Hydrogen server builder completed",
+        await audit(self.bot, ctx.guild, "WardenX Manager server builder completed",
             f"Created {len(made_roles)} roles, {len(made_categories)} categories, "
             f"{len(made_channels)} channels; verification access applied={access_ok}.", ctx.author)
         await ctx.send(
@@ -381,7 +381,7 @@ class ServerBuilder(commands.Cog):
             f"Categories created: {len(made_categories)}\n"
             f"Channels created: {len(made_channels)} (existing kept: {len(kept_channels)})\n"
             f"Gemini permissions were filtered; elevated permissions required your explicit approval.\n"
-            f"Classification roles: Hydrogen, Bots, Members (existing members classified; new joins handled automatically).\n"
+            f"Classification roles: WardenX, Bots, Members (existing members classified; new joins handled automatically).\n"
             f"**Verification access:** {access_note}\n"
             "Existing matching roles/channels are retained and unrelated channels are not deleted."
         )
