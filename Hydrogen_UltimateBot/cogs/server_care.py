@@ -114,6 +114,29 @@ class ServerCare(commands.Cog):
         lines = [f"#{r['id']} • {r['created_at']} • {r['description'] or 'Server structure'}" for r in rows]
         await ctx.reply("**Recent server backups**\n" + "\n".join(lines))
 
+    @backup.command(name="export")
+    async def backup_export(self, ctx, backup_id: int):
+        """Send a selected JSON backup file to the server owner."""
+        if not await self._owner(ctx):
+            return
+        if ctx.author.id != ctx.guild.owner_id:
+            return await ctx.reply("Only the actual Discord server owner can export a backup.")
+        row = await db.fetchone(
+            "SELECT file_path FROM server_backups WHERE id=? AND guild_id=?",
+            (backup_id, ctx.guild.id)
+        )
+        if not row:
+            return await ctx.reply("Backup not found for this server.")
+        path = (BASE / row["file_path"]).resolve()
+        if BACKUP_DIR.resolve() not in path.parents or not path.is_file():
+            return await ctx.reply("Backup file is missing or its path is invalid.")
+        if path.stat().st_size > ctx.guild.filesize_limit:
+            return await ctx.reply("This backup exceeds the server's upload size limit.")
+        await ctx.reply(
+            f"Here is backup #{backup_id}. Keep it somewhere safe.",
+            file=discord.File(path, filename=f"hydrogen-backup-{backup_id}.json")
+        )
+
     @backup.command(name="restore")
     async def backup_restore(self, ctx, backup_id: int, confirmation: str = ""):
         """Restore missing structure from a backup; never deletes existing items."""
