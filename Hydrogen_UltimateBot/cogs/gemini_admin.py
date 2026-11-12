@@ -57,7 +57,7 @@ class GeminiAdmin(commands.Cog):
             result = await self.bot.ai.ask("Reply with exactly: Hydrogen Gemini connection OK.", purpose="owner_test")
             await ctx.followup.send(f"Gemini test succeeded using key **{self.bot.ai.active_key_index + 1}**.\n`{result[:300]}`", ephemeral=True)
         except AIUnavailable as exc:
-            await ctx.followup.send(f"Gemini test failed: {exc}", ephemeral=True)
+            await ctx.send(f"Gemini test failed: {exc}", ephemeral=True)
 
 
 async def setup(bot):
