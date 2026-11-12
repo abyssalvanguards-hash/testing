@@ -1,4 +1,4 @@
-"""Optional outbound connector for the separate Hydrogen web panel.
+"""Optional outbound connector for the separate WardenX Manager web panel.
 
 Disabled by default. Polling is bounded and failures never stop the Discord bot.
 Gemini may draft allow-listed plans. Every server mutation remains behind the
@@ -111,7 +111,7 @@ class PanelConnector(commands.Cog):
         command = str(item.get("command", "")).strip()
         guild = self.bot.get_guild(guild_id)
         if not guild:
-            await self._report(command_id, "rejected", "Hydrogen is not in that server.")
+            await self._report(command_id, "rejected", "WardenX Manager is not in that server.")
             return
         member = guild.get_member(user_id)
         if member is None:
@@ -120,7 +120,7 @@ class PanelConnector(commands.Cog):
             except (discord.NotFound, discord.Forbidden, discord.HTTPException):
                 member = None
         if member is None or not await is_server_owner_or_global(member, self.bot.owner_ids):
-            await self._report(command_id, "rejected", "Only the server owner or configured Hydrogen owner can submit panel commands.")
+            await self._report(command_id, "rejected", "Only the server owner or configured WardenX Manager owner can submit panel commands.")
             return
 
         normalized = command.casefold().strip()
@@ -128,7 +128,7 @@ class PanelConnector(commands.Cog):
             result = (
                 f"Server: {guild.name}\nMembers: {guild.member_count}\n"
                 f"Channels: {len(guild.channels)}\nRoles: {len(guild.roles)}\n"
-                f"Hydrogen: online"
+                f"WardenX Manager: online"
             )
             await self._report(command_id, "completed", result)
             return
@@ -257,7 +257,7 @@ class PanelConnector(commands.Cog):
                     await self._handle(item)
                 except Exception:
                     log.exception("Panel command handling failed.")
-                    await self._report(int(item.get("id", 0)), "failed", "Hydrogen could not process this request.")
+                    await self._report(int(item.get("id", 0)), "failed", "WardenX Manager could not process this request.")
         except (aiohttp.ClientError, asyncio.TimeoutError):
             log.warning("Panel is unreachable; Discord bot continues normally.")
         except Exception:
