@@ -64,7 +64,7 @@ class RolePermissionConfirmation(discord.ui.View):
     async def approve(self, interaction, button):
         self.approved = True
         await interaction.response.send_message(
-            "Permission plan approved. Hydrogen will now create the missing roles.", ephemeral=True
+            "Permission plan approved. WardenX Manager will now create the missing roles.", ephemeral=True
         )
         self.stop()
 
@@ -101,7 +101,7 @@ class ServerBuilder(commands.Cog):
         )
 
     async def _assign_classification(self, member):
-        """Assign Hydrogen, Bots, or Members based on the joining account."""
+        """Assign WardenX, Bots, or Members based on the joining account."""
         guild = member.guild
         if self.bot.user and member.id == self.bot.user.id:
             base_name = "WardenX"
