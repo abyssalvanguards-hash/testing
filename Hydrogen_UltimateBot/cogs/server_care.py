@@ -34,6 +34,10 @@ def validate_backup_payload(payload, guild_id):
         for key in ("permissions", "color", "position"):
             if key in role and (type(role[key]) is not int or role[key] < 0):
                 raise ValueError("Backup contains invalid role settings.")
+        if role.get("color", 0) > 0xFFFFFF:
+            raise ValueError("Backup contains an invalid role color.")
+        if role.get("permissions", 0) >= (1 << 53):
+            raise ValueError("Backup contains an unsupported permission bitfield.")
         if "hoist" in role and type(role["hoist"]) is not bool:
             raise ValueError("Backup contains invalid role settings.")
         if "mentionable" in role and type(role["mentionable"]) is not bool:
@@ -64,7 +68,9 @@ def validate_backup_payload(payload, guild_id):
                     or type(overwrite.get("allow", 0)) is not int
                     or type(overwrite.get("deny", 0)) is not int
                     or overwrite.get("allow", 0) < 0
-                    or overwrite.get("deny", 0) < 0):
+                    or overwrite.get("deny", 0) < 0
+                    or overwrite.get("allow", 0) >= (1 << 53)
+                    or overwrite.get("deny", 0) >= (1 << 53)):
                 raise ValueError("Backup contains an invalid permission overwrite.")
         for key in ("nsfw",):
             if key in channel and type(channel[key]) is not bool:
@@ -72,8 +78,14 @@ def validate_backup_payload(payload, guild_id):
         for key in ("slowmode_delay", "bitrate", "user_limit", "position"):
             if key in channel and (type(channel[key]) is not int or channel[key] < 0):
                 raise ValueError("Backup contains invalid channel settings.")
+        if "topic" in channel and channel["topic"] is not None and (
+                not isinstance(channel["topic"], str) or len(channel["topic"]) > 1024):
+            raise ValueError("Backup contains an invalid channel topic.")
         if channel.get("type") == "text" and channel.get("slowmode_delay", 0) > 21600:
             raise ValueError("Backup contains an invalid slowmode value.")
+        if channel.get("type") == "voice":
+            if channel.get("bitrate", 64000) < 8000 or channel.get("user_limit", 0) > 99:
+                raise ValueError("Backup contains unsupported voice channel settings.")
     return roles, channels
 
 
@@ -252,7 +264,9 @@ class ServerCare(commands.Cog):
                 if item["type"] == "text":
                     await ctx.guild.create_text_channel(name, category=category, overwrites=overwrites, topic=item.get("topic"), nsfw=bool(item.get("nsfw", False)), slowmode_delay=int(item.get("slowmode_delay", 0)), reason=reason)
                 elif item["type"] == "voice":
-                    await ctx.guild.create_voice_channel(name, category=category, overwrites=overwrites, bitrate=min(int(item.get("bitrate", 64000)), ctx.guild.bitrate_limit), user_limit=int(item.get("user_limit", 0)), reason=reason)
+                    bitrate_limit = max(8000, int(ctx.guild.bitrate_limit))
+                    bitrate = min(max(8000, int(item.get("bitrate", 64000))), bitrate_limit)
+                    await ctx.guild.create_voice_channel(name, category=category, overwrites=overwrites, bitrate=bitrate, user_limit=min(int(item.get("user_limit", 0)), 99), reason=reason)
         except (discord.Forbidden, discord.HTTPException, ValueError, TypeError, KeyError) as exc:
             return await ctx.reply(f"Restore stopped safely after a partial restore: {type(exc).__name__}: {str(exc)[:180]}")
         await ctx.reply(f"Restore completed: created {len(missing_roles)} roles, {len(missing_categories)} categories, and {len(missing_channels)} channels. No existing items were edited or deleted.")
