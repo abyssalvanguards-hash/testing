@@ -179,21 +179,27 @@ class PanelConnector(commands.Cog):
                     if not all(isinstance(x, list) for x in (categories, channels, renames)):
                         raise ValueError("Gemini returned invalid restructuring fields.")
                     for name in categories[:20]:
-                        if isinstance(name, str) and name.strip(): clean["categories"].append(clean_panel_name(name))
+                        normalized = clean_panel_name(name)
+                        if normalized:
+                            clean["categories"].append(normalized)
                     for item in channels[:60]:
                         if isinstance(item, dict) and isinstance(item.get("name"), str) and isinstance(item.get("category"), str):
-                            clean["channels"].append({"name": clean_panel_name(item["name"]), "category": clean_panel_name(item["category"])})
+                            channel_name = clean_panel_name(item["name"])
+                            category_name = clean_panel_name(item["category"])
+                            if channel_name and category_name:
+                                clean["channels"].append({"name": channel_name, "category": category_name})
                     valid_ids = {ch.id for ch in guild.channels}
                     for item in renames[:30]:
                         if isinstance(item, dict) and str(item.get("channel_id", "")).isdigit() and int(item["channel_id"]) in valid_ids and isinstance(item.get("new_name"), str):
-                            clean["rename"].append({"channel_id": int(item["channel_id"]), "new_name": clean_panel_name(item["new_name"])})
+                            new_name = clean_panel_name(item["new_name"])
+                            if new_name:
+                                clean["rename"].append({"channel_id": int(item["channel_id"]), "new_name": new_name})
                 else:
                     from cogs.ai_server_manager import ALLOWED_PERMS
                     clean = {"summary": str(plan.get("summary", "Least-privilege permission review"))[:500], "changes": []}
                     changes = plan.get("changes", [])
                     if not isinstance(changes, list):
                         raise ValueError("Gemini returned invalid permission changes.")
-                    panel_perms = {"view_channel", "send_messages", "read_message_history", "embed_links", "attach_files", "add_reactions"}
                     for item in changes[:60]:
                         if not isinstance(item, dict): continue
                         channel = discord.utils.get(guild.channels, name=str(item.get("channel", "")))
