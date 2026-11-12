@@ -1,0 +1,164 @@
+{
+  "role_format": "W X・{name}",
+  "channel_format": "▫-{name_in_smallcaps}",
+  "category_format": "━━━「 {name_in_caps} 」━━━",
+  "categories": [
+    {
+      "name": "COMMUNITY",
+      "channels": [
+        {
+          "name": "welcome",
+          "type": "text"
+        },
+        {
+          "name": "left",
+          "type": "text"
+        },
+        {
+          "name": "announcements",
+          "type": "text"
+        },
+        {
+          "name": "giveaway",
+          "type": "text"
+        },
+        {
+          "name": "gen bot update",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": "PERKS",
+      "channels": [
+        {
+          "name": "booster perks",
+          "type": "text"
+        },
+        {
+          "name": "vip perks",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": "GENERAL CHAT",
+      "channels": [
+        {
+          "name": "general chat",
+          "type": "text"
+        },
+        {
+          "name": "media",
+          "type": "text"
+        },
+        {
+          "name": "cmd",
+          "type": "text"
+        },
+        {
+          "name": "video links",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": "GEN BOT",
+      "channels": [
+        {
+          "name": "how to access",
+          "type": "text"
+        },
+        {
+          "name": "free generator",
+          "type": "text"
+        },
+        {
+          "name": "booster gen",
+          "type": "text"
+        },
+        {
+          "name": "premium gen",
+          "type": "text"
+        },
+        {
+          "name": "channel vouchers",
+          "type": "text"
+        },
+        {
+          "name": "restock",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": "VOICE",
+      "channels": [
+        {
+          "name": "voice one",
+          "type": "voice"
+        },
+        {
+          "name": "voice two",
+          "type": "voice"
+        },
+        {
+          "name": "voice three",
+          "type": "voice"
+        },
+        {
+          "name": "music one",
+          "type": "voice"
+        },
+        {
+          "name": "music two",
+          "type": "voice"
+        }
+      ]
+    },
+    {
+      "name": "SUPPORT",
+      "channels": [
+        {
+          "name": "support tickets",
+          "type": "text"
+        },
+        {
+          "name": "report user tickets",
+          "type": "text"
+        },
+        {
+          "name": "staff applications",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "roles": [
+    "Founder",
+    "Owner",
+    "Manager",
+    "Admin",
+    "Senior Manager",
+    "Senior Moderator",
+    "Moderator",
+    "Senior Staff",
+    "Staff",
+    "Trial Staff",
+    "Member",
+    "Booster",
+    "VIP",
+    "1 Invite",
+    "2 Invites",
+    "5 Invites",
+    "10 Invites",
+    "15 Invites"
+  ],
+  "invite_reward_thresholds": [
+    1,
+    2,
+    5,
+    10,
+    15
+  ]
+}
