@@ -146,7 +146,7 @@ class CoreAdmin(commands.Cog):
     async def help_command(self, ctx):
         """Show available commands and concise usage guidance."""
         embed = discord.Embed(
-            title="Hydrogen UltimateBot — Help",
+            title="WardenX Manager — Help",
             description=(
                 f"Use slash commands with `/` or prefix commands with `{ctx.prefix}`. "
                 "Command availability depends on your permissions and enabled configuration.\n"
@@ -197,12 +197,12 @@ class CoreAdmin(commands.Cog):
             ),
             inline=False
         )
-        embed.set_footer(text="Hydrogen UltimateBot • Use /help anytime")
+        embed.set_footer(text="WardenX Manager • Use /help anytime")
         await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="bothelp")
     async def show_bot_help(self, ctx):
-        embed=discord.Embed(title="Hydrogen UltimateBot",description="Prefix commands and panels. Made by Hydrogen.",color=discord.Color.blurple())
+        embed=discord.Embed(title="WardenX Manager",description="Prefix commands and panels. Developer: @h_two_.",color=discord.Color.blurple())
         embed.add_field(name="Setup",value="`!setup_logs`, `!setrole staff @Role`, `!prefix ?`",inline=False)
         embed.add_field(name="Tickets",value="`!ticketconfig key #category @staff title | description`, `!ticketpanel key`",inline=False)
         embed.add_field(name="Applications",value="`!applicationpanel`",inline=False)
