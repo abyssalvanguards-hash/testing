@@ -32,3 +32,9 @@ def test_panel_name_is_normalized_and_bounded():
     assert clean_panel_name("General Chat!") == "general-chat"
     assert len(clean_panel_name("A" * 200)) <= 80
     assert clean_panel_name(123) == ""
+
+
+
+@pytest.mark.parametrize("value", ["!!!", "---", "   ", "", None, 42])
+def test_clean_panel_name_rejects_empty_normalized_values(value):
+    assert clean_panel_name(value) == ""
