@@ -3,6 +3,7 @@ from pathlib import Path
 
 from cogs.server_builder import (
     SAFE_ROLE_PERMISSIONS,
+    CLASSIFICATION_ROLES,
     category_name,
     channel_name,
     role_name,
@@ -45,3 +46,11 @@ def test_channel_access_config_is_per_guild_and_uses_placeholders_only():
     assert "YOUR_TEST_GUILD_ID" in config["guilds"]
     item = config["guilds"]["YOUR_TEST_GUILD_ID"]
     assert set(item) == {"verified_role_id", "verification_channel_id", "protected_channel_ids"}
+
+
+
+def test_classification_roles_cover_hydrogen_bots_and_humans():
+    assert CLASSIFICATION_ROLES == ("Hydrogen", "Bots", "Members")
+    assert role_name("Hydrogen") == "W X・Hydrogen"
+    assert role_name("Bots") == "W X・Bots"
+    assert role_name("Members") == "W X・Members"
