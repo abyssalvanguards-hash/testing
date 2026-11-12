@@ -5,6 +5,7 @@ must validate and execute each supported action. Never execute arbitrary code.
 """
 import asyncio
 import hashlib
+import html
 import hmac
 import json
 import os
@@ -127,7 +128,7 @@ async def callback(request):
     # Store only the identity. OAuth access tokens are deliberately not persisted.
     owner_guilds = [str(g["id"]) for g in guilds if g.get("owner") is True]
     payload = json.dumps({"uid": str(user["id"]), "name": str(user.get("username", "user"))[:80],
-                          "guilds": owner_guilds, "exp": int(time.time()) + SESSION_TTL},
+                          "guilds": owner_guilds, "csrf": secrets.token_urlsafe(24), "exp": int(time.time()) + SESSION_TTL},
                          separators=(",", ":"))
     response = web.HTTPFound("/")
     response.set_cookie(COOKIE_NAME, payload + "." + _signature(payload),
@@ -152,17 +153,19 @@ async def index(request):
     guilds = "".join(f"<option value='{g}'>{g}</option>" for g in user["guilds"])
     return web.Response(text=f"""<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'>
 <title>Hydrogen Panel</title><main style='font:16px system-ui;max-width:680px;margin:5vh auto;padding:20px'>
-<h1>Hydrogen Control Panel</h1><p>Signed in as {web.html_escape(user['name'])}</p>
-<form id=f><label>Server you own <select id=g required>{guilds}</select></label>
+<h1>Hydrogen Control Panel</h1><p>Signed in as {html.escape(user['name'])}</p>
+<form id=f><input type=hidden id=csrf value='{user['csrf']}'><label>Server you own <select id=g required>{guilds}</select></label>
 <p><label>Gemini instruction <textarea id=c maxlength=1500 required style='display:block;width:100%;min-height:110px'></textarea></label></p>
 <button>Queue request</button></form><pre id=o></pre><p><a href='/logout'>Sign out</a></p>
 <script>
-f.onsubmit=async e=>{{e.preventDefault();let r=await fetch('/api/commands',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{guild_id:g.value,command:c.value}})}});o.textContent=await r.text();}};
+f.onsubmit=async e=>{{e.preventDefault();let r=await fetch('/api/commands',{{method:'POST',headers:{{'Content-Type':'application/json','X-CSRF-Token':csrf.value}},body:JSON.stringify({{guild_id:g.value,command:c.value}})}});o.textContent=await r.text();}};
 </script></main>""", content_type="text/html")
 
 
 async def enqueue(request):
     user = _require_session(request)
+    if not hmac.compare_digest(request.headers.get('X-CSRF-Token', ''), str(user.get('csrf', ''))):
+        raise web.HTTPForbidden(text='Invalid CSRF token.')
     try:
         body = await request.json()
     except (json.JSONDecodeError, ValueError):
