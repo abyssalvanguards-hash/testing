@@ -113,7 +113,7 @@ async def get_setting(guild_id, key, default=None):
 async def set_setting(guild_id, key, value):
     allowed = {
         "prefix","log_channel_id","review_channel_id","staff_role_id",
-        "admin_role_id","mod_role_id","welcome_channel_id","goodbye_channel_id",
+        "admin_role_id","mod_role_id","welcome_channel_id","goodbye_channel_id","verified_role_id",
         "ticket_transcript_channel_id","excluded_category_id","upi_id","upi_payee",
         "ltc_address","btc_address","channel_template"
     }
