@@ -236,7 +236,32 @@ class ServerCare(commands.Cog):
             return await ctx.reply(f"Could not read this backup: {str(exc)[:180]}")
         missing_roles = [x for x in roles if not discord.utils.get(ctx.guild.roles, name=x["name"])]
         missing_categories = [x for x in channels if x["type"] == "category" and not discord.utils.get(ctx.guild.categories, name=x["name"])]
-        missing_channels = [x for x in channels if x["type"] in {"text", "voice"} and not discord.utils.get(ctx.guild.channels, name=x["name"])]
+        missing_channels = [
+            x for x in channels
+            if (x["type"] == "text" and not discord.utils.get(ctx.guild.text_channels, name=x["name"]))
+            or (x["type"] == "voice" and not discord.utils.get(ctx.guild.voice_channels, name=x["name"]))
+        ]
+        known_category_names = {category.name for category in ctx.guild.categories}
+        known_category_names.update(x["name"] for x in channels if x["type"] == "category")
+        missing_category_refs = sorted({
+            x["category"] for x in channels
+            if x["type"] in {"text", "voice"} and x.get("category")
+            and x["category"] not in known_category_names
+        })
+        known_role_names = {role.name for role in ctx.guild.roles}
+        known_role_names.update(x["name"] for x in roles)
+        missing_overwrite_roles = sorted({
+            ow["target_name"] for channel in channels
+            for ow in channel.get("overwrites", [])
+            if ow["target_name"] not in known_role_names
+        })
+        if missing_category_refs or missing_overwrite_roles:
+            details = []
+            if missing_category_refs:
+                details.append("unknown categories: " + ", ".join(missing_category_refs[:5]))
+            if missing_overwrite_roles:
+                details.append("unknown overwrite roles: " + ", ".join(missing_overwrite_roles[:5]))
+            return await ctx.reply("Restore preview blocked because the backup references missing structure (" + "; ".join(details) + ").")
         preview = (f"Backup #{backup_id}: create {len(missing_roles)} roles, {len(missing_categories)} categories, and {len(missing_channels)} channels. Existing items will be left unchanged; nothing will be deleted. Message history and member assignments cannot be restored. To proceed, run /backup restore {backup_id} CONFIRM.")
         if confirmation != "CONFIRM": return await ctx.reply(preview)
         bot_member = ctx.guild.me
