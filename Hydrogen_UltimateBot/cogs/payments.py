@@ -22,7 +22,7 @@ class Payments(commands.Cog):
         method=method.lower()
         if method=="upi":
             await db.set_setting(ctx.guild.id,"upi_id",value)
-            await db.set_setting(ctx.guild.id,"upi_payee",extra or "Hydrogen")
+            await db.set_setting(ctx.guild.id,"upi_payee",extra or "@h_two_")
         elif method in ("ltc","btc"):
             await db.set_setting(ctx.guild.id,method+"_address",value)
         else: return await ctx.reply("Methods: upi, ltc, btc.")
@@ -40,7 +40,7 @@ class Payments(commands.Cog):
             (ctx.guild.id,ctx.author.id,method,amount,ref,datetime.now(timezone.utc).isoformat()))
         if method=="upi":
             upi=await db.get_setting(ctx.guild.id,"upi_id")
-            payee=await db.get_setting(ctx.guild.id,"upi_payee","Hydrogen")
+            payee=await db.get_setting(ctx.guild.id,"upi_payee","WardenX Manager")
             if not upi: return await ctx.reply("UPI is not configured by the server owner.")
             uri="upi://pay?"+urllib.parse.urlencode({"pa":upi,"pn":payee,"am":f"{amount:.2f}","cu":"INR","tn":f"Invoice {ref}"})
             embed=discord.Embed(title=f"UPI Invoice • {ref}",description=f"Amount: ₹{amount:.2f}\nUPI ID: `{upi}`\nPayee: {payee}\nReference: `{ref}`\n\nPayment is manually verified by staff.",color=discord.Color.blurple())
