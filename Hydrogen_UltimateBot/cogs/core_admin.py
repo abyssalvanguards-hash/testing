@@ -142,29 +142,62 @@ class CoreAdmin(commands.Cog):
         await audit(self.bot, ctx.guild, "Role revoked", f"{role.mention} from {member.mention}", ctx.author)
         await ctx.reply(f"Removed {role.mention} from {member.mention}.")
 
-    @commands.hybrid_command(name="help", description="Show Hydrogen commands and how to use them.")
+    @commands.hybrid_command(name="help", description="Show all Hydrogen commands, including subcommands and server-care tools.")
     async def help_command(self, ctx):
-        """Show all available prefix and slash commands."""
+        """Show available commands and concise usage guidance."""
         embed = discord.Embed(
             title="Hydrogen UltimateBot — Help",
-            description=(f"Use slash commands with `/` or prefix commands with `{ctx.prefix}`. "
-                         "Both interfaces are supported. Made by Hydrogen."),
+            description=(
+                f"Use slash commands with `/` or prefix commands with `{ctx.prefix}`. "
+                "Command availability depends on your permissions and enabled configuration.\n"
+                "Use a command's slash-command menu for its required arguments."
+            ),
             color=discord.Color.blurple()
         )
         grouped = {}
         for command in sorted(self.bot.walk_commands(), key=lambda c: c.qualified_name):
-            if command.hidden or command.parent is not None:
+            if command.hidden:
                 continue
             cog_name = command.cog_name or "General"
             grouped.setdefault(cog_name, []).append(command)
+
         for cog_name, commands_in_group in grouped.items():
             lines = []
             for command in commands_in_group:
+                qualified = command.qualified_name
                 description = command.short_doc or command.help or "No description provided."
-                lines.append(f"`/{command.name}`  ·  `{ctx.prefix}{command.name}` — {description[:100]}")
-            if lines:
-                embed.add_field(name=cog_name, value="\n".join(lines)[:1024], inline=False)
-        embed.set_footer(text="Hydrogen UltimateBot • Made by Hydrogen")
+                prefix_usage = f"{ctx.prefix}{qualified}"
+                slash_usage = f"/{qualified}"
+                lines.append(f"`{slash_usage}` · `{prefix_usage}` — {description.splitlines()[0][:120]}")
+            # Discord limits each embed field to 1024 characters.
+            chunks = []
+            current = ""
+            for line in lines:
+                candidate = f"{current}\n{line}" if current else line
+                if len(candidate) > 1000:
+                    if current:
+                        chunks.append(current)
+                    current = line[:1000]
+                else:
+                    current = candidate
+            if current:
+                chunks.append(current)
+            for index, chunk in enumerate(chunks, start=1):
+                if len(embed.fields) >= 24:
+                    break
+                field_name = cog_name if index == 1 else f"{cog_name} (continued)"
+                embed.add_field(name=field_name[:256], value=chunk, inline=False)
+
+        embed.add_field(
+            name="Server care quick guide",
+            value=(
+                "`/busy 2d` · `/busyoff` · `/busystatus`\n"
+                "`/backup create` · `/backup list` · `/backup export <id>`\n"
+                "`/backup restore <id>` previews a restore; the server owner must confirm it."
+            ),
+            inline=False
+        )
+        embed.set_footer(text="Hydrogen UltimateBot • Use /help anytime")
         await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="bothelp")
