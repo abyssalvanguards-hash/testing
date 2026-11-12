@@ -41,11 +41,13 @@ def _db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         guild_id TEXT NOT NULL, user_id TEXT NOT NULL,
         command TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
-        created_at INTEGER NOT NULL, result TEXT, delivered_at INTEGER
+        created_at INTEGER NOT NULL, result TEXT, delivered_at INTEGER, claim_token TEXT
     )""")
     columns = {row[1] for row in conn.execute('PRAGMA table_info(commands)').fetchall()}
     if 'delivered_at' not in columns:
         conn.execute('ALTER TABLE commands ADD COLUMN delivered_at INTEGER')
+    if 'claim_token' not in columns:
+        conn.execute('ALTER TABLE commands ADD COLUMN claim_token TEXT')
     conn.commit()
     return conn
 
@@ -231,12 +233,17 @@ def _claim_commands(now=None):
                ORDER BY id LIMIT 5""",
             (now - COMMAND_LEASE_SECONDS,)
         ).fetchall()
+        claimed = []
         for row in rows:
+            token = secrets.token_urlsafe(24)
             conn.execute(
-                "UPDATE commands SET status='processing',delivered_at=? WHERE id=?",
-                (now, row["id"])
+                "UPDATE commands SET status='processing',delivered_at=?,claim_token=? WHERE id=?",
+                (now, token, row["id"])
             )
-    return [dict(row) for row in rows]
+            item = dict(row)
+            item["claim_token"] = token
+            claimed.append(item)
+    return claimed
 
 
 async def bot_commands(request):
@@ -249,14 +256,21 @@ async def bot_result(request):
         body = await request.json()
         command_id = int(body["id"])
         status = str(body["status"])
+        claim_token = str(body["claim_token"])
         result = str(body.get("result", ""))[:1500]
     except (ValueError, KeyError, TypeError, json.JSONDecodeError):
         raise web.HTTPBadRequest(text="Invalid result payload.")
     if status not in {"completed", "needs_confirmation", "rejected", "failed"}:
         raise web.HTTPBadRequest(text="Unsupported result status.")
+    if not claim_token or len(claim_token) > 128:
+        raise web.HTTPBadRequest(text="Invalid claim token.")
     with _db() as conn:
-        conn.execute("UPDATE commands SET status=?,result=? WHERE id=?",
-                     (status, result, command_id))
+        cur = conn.execute(
+            "UPDATE commands SET status=?,result=?,claim_token=NULL WHERE id=? AND status='processing' AND claim_token=?",
+            (status, result, command_id, claim_token)
+        )
+        if cur.rowcount != 1:
+            raise web.HTTPConflict(text="This command lease is no longer current.")
     return web.json_response({"ok": True})
 
 
