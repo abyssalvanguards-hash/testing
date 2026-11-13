@@ -2,6 +2,7 @@
 import asyncio
 from datetime import datetime, timezone
 import json
+import logging
 from pathlib import Path
 import aiohttp
 from config import AI_DAILY_REQUEST_LIMIT
@@ -15,7 +16,8 @@ class GeminiService:
         if isinstance(keys, str):
             keys = [keys]
         self.keys = [str(k).strip() for k in (keys or []) if k and "PASTE_" not in str(k)]
-        self.model = model or "gemini-3.8-flash"\n        self.fallback_model = (fallback_model or "").strip() or None
+        self.model = model or "gemini-3.8-flash"
+        self.fallback_model = (fallback_model or "").strip() or None
         self.selection_file = Path(__file__).resolve().parents[1] / "data" / "gemini_selection.json"
         self.active_key_index = 0
         try:
@@ -115,7 +117,8 @@ class GeminiService:
 
                                 candidates = data.get("candidates") or []
                                 parts = (((candidates[0] or {}).get("content") or {}).get("parts") or []) if candidates else []
-                                answer = "\\n".join(str(part.get("text", "")) for part in parts if part.get("text"))
+                                answer = "\
+".join(str(part.get("text", "")) for part in parts if part.get("text"))
                                 if not answer:
                                     reason = ((candidates[0] or {}).get("finishReason") if candidates else None) or data.get("promptFeedback", {}).get("blockReason") or "unknown response"
                                     raise AIUnavailable(f"Gemini returned no text ({reason}). Try a shorter request or check the API's safety/availability status.")
