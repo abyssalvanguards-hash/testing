@@ -11,11 +11,11 @@ class AIUnavailable(Exception):
     """Raised when AI is unavailable; message is safe to show to server staff."""
 
 class GeminiService:
-    def __init__(self, keys, model="gemini-3.8-flash"):
+    def __init__(self, keys, model="gemini-3.8-flash", fallback_model="gemini-3.5-flash-lite"):
         if isinstance(keys, str):
             keys = [keys]
         self.keys = [str(k).strip() for k in (keys or []) if k and "PASTE_" not in str(k)]
-        self.model = model or "gemini-3.8-flash"
+        self.model = model or "gemini-3.8-flash"\n        self.fallback_model = (fallback_model or "").strip() or None
         self.selection_file = Path(__file__).resolve().parents[1] / "data" / "gemini_selection.json"
         self.active_key_index = 0
         try:
@@ -62,54 +62,82 @@ class GeminiService:
         if guild_id is not None:
             await self._check_budget(guild_id, purpose)
 
-        # Use the manually selected key. No automatic quota-based rotation.
         key = self.active_key
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
         body = {
             "contents": [{"role": "user", "parts": [{"text": str(prompt)}]}],
             "generationConfig": {"temperature": 0.2, "maxOutputTokens": 4096}
         }
+        models = [self.model]
+        if self.fallback_model and self.fallback_model != self.model:
+            models.append(self.fallback_model)
+
         try:
             async with self._semaphore:
                 async with aiohttp.ClientSession(timeout=self.timeout) as session:
-                    for attempt in range(2):
-                        async with session.post(url, params={"key": key}, json=body) as response:
-                            raw = await response.text()
-                            if response.status == 503 and attempt == 0:
-                                # Gemini may briefly reject requests during capacity spikes.
-                                await asyncio.sleep(1.5)
-                                continue
-                            break
-                    try:
-                        data = json.loads(raw) if raw else {}
-                    except json.JSONDecodeError:
-                        data = {}
-                    if response.status >= 400:
-                        detail = ((data.get("error") or {}).get("message") or raw or "No error details returned")
-                        detail = " ".join(str(detail).split())[:500]
-                        if response.status == 400 and ("API_KEY_INVALID" in detail or "API key not valid" in detail.lower()):
-                            raise AIUnavailable("Gemini rejected the API key (HTTP 400). Check that the key in private_config.py is correct and enabled for the Gemini API.")
-                        if response.status in (401, 403):
-                            raise AIUnavailable(f"Gemini authorization failed (HTTP {response.status}). Check the API key, API access, and project restrictions. Details: {detail}")
-                        if response.status == 404:
-                            raise AIUnavailable(f"Gemini model/API endpoint not found (HTTP 404). Check the configured model name `{self.model}`. Details: {detail}")
-                        if response.status == 429:
-                            raise AIUnavailable("Gemini quota or rate limit reached (HTTP 429). Wait for the provider limit to reset; no backup-key quota rotation is performed.")
-                        raise AIUnavailable(f"Gemini API returned HTTP {response.status}: {detail}")
+                    data = {}
+                    answer = ""
+                    last_503_detail = ""
+                    for model_index, model in enumerate(models):
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+                        for attempt, delay in enumerate((0, 1.5, 3.5)):
+                            async with session.post(url, params={"key": key}, json=body) as response:
+                                raw = await response.text()
+                                try:
+                                    data = json.loads(raw) if raw else {}
+                                except json.JSONDecodeError:
+                                    data = {}
+                                if response.status == 503:
+                                    last_503_detail = ((data.get("error") or {}).get("message") or raw or "No error details returned")
+                                    logging.warning(
+                                        "Gemini model %s returned HTTP 503 (attempt %s/3).",
+                                        model, attempt + 1
+                                    )
+                                    if attempt < 2:
+                                        await asyncio.sleep(delay if delay else 0)
+                                        continue
+                                    if model_index + 1 < len(models):
+                                        logging.warning("Gemini primary model %s remains unavailable; trying fallback model %s.", model, models[model_index + 1])
+                                        break
+                                    detail = " ".join(str(last_503_detail).split())[:400]
+                                    raise AIUnavailable(f"Gemini models are temporarily overloaded (HTTP 503). Tried {', '.join(models)}. Details: {detail}")
+                                if response.status >= 400:
+                                    detail = ((data.get("error") or {}).get("message") or raw or "No error details returned")
+                                    detail = " ".join(str(detail).split())[:500]
+                                    if response.status == 400 and ("API_KEY_INVALID" in detail or "API key not valid" in detail.lower()):
+                                        raise AIUnavailable("Gemini rejected the API key (HTTP 400). Check that the key in private_config.py is correct and enabled for the Gemini API.")
+                                    if response.status in (401, 403):
+                                        raise AIUnavailable(f"Gemini authorization failed (HTTP {response.status}). Check the API key, API access, and project restrictions. Details: {detail}")
+                                    if response.status == 404:
+                                        raise AIUnavailable(f"Gemini model/API endpoint not found (HTTP 404). Check the configured model name `{model}`. Details: {detail}")
+                                    if response.status == 429:
+                                        raise AIUnavailable("Gemini quota or rate limit reached (HTTP 429). Check the project's quota and try again later.")
+                                    raise AIUnavailable(f"Gemini API returned HTTP {response.status} for model {model}: {detail}")
 
-                    candidates = data.get("candidates") or []
-                    parts = (((candidates[0] or {}).get("content") or {}).get("parts") or []) if candidates else []
-                    answer = "\n".join(str(part.get("text", "")) for part in parts if part.get("text"))
+                                candidates = data.get("candidates") or []
+                                parts = (((candidates[0] or {}).get("content") or {}).get("parts") or []) if candidates else []
+                                answer = "\\n".join(str(part.get("text", "")) for part in parts if part.get("text"))
+                                if not answer:
+                                    reason = ((candidates[0] or {}).get("finishReason") if candidates else None) or data.get("promptFeedback", {}).get("blockReason") or "unknown response"
+                                    raise AIUnavailable(f"Gemini returned no text ({reason}). Try a shorter request or check the API's safety/availability status.")
+                                logging.info("Gemini request succeeded using model %s.", model)
+                                break
+                            # The inner loop breaks after a successful response or final 503.
+                            if answer or (response.status == 503 and model_index + 1 < len(models) and attempt == 2):
+                                break
+                        if answer:
+                            break
                     if not answer:
-                        reason = ((candidates[0] or {}).get("finishReason") if candidates else None) or data.get("promptFeedback", {}).get("blockReason") or "unknown response"
-                        raise AIUnavailable(f"Gemini returned no text ({reason}). Try a shorter request or check the API's safety/availability status.")
+                        raise AIUnavailable("Gemini did not return a response from the configured models.")
         except AIUnavailable:
             raise
         except asyncio.TimeoutError as exc:
-            raise AIUnavailable("Gemini request timed out after 90 seconds. Gemini may be overloaded; try again later.") from exc
+            logging.exception("Gemini request timed out (primary=%s, fallback=%s).", self.model, self.fallback_model or "disabled")
+            raise AIUnavailable("Gemini request timed out after 90 seconds. Check Gemini availability and hosting network diagnostics.") from exc
         except aiohttp.ClientError as exc:
+            logging.exception("Gemini network request failed (%s).", type(exc).__name__)
             raise AIUnavailable(f"Could not connect to Gemini ({type(exc).__name__}). Check hosting network access and try again.") from exc
         except Exception as exc:
+            logging.exception("Unexpected Gemini integration error.")
             raise AIUnavailable(f"Unexpected Gemini integration error ({type(exc).__name__}): {str(exc)[:250]}") from exc
 
         if guild_id is not None:
