@@ -117,8 +117,7 @@ class GeminiService:
 
                                 candidates = data.get("candidates") or []
                                 parts = (((candidates[0] or {}).get("content") or {}).get("parts") or []) if candidates else []
-                                answer = "\
-".join(str(part.get("text", "")) for part in parts if part.get("text"))
+                                answer = chr(10).join(str(part.get("text", "")) for part in parts if part.get("text"))
                                 if not answer:
                                     reason = ((candidates[0] or {}).get("finishReason") if candidates else None) or data.get("promptFeedback", {}).get("blockReason") or "unknown response"
                                     raise AIUnavailable(f"Gemini returned no text ({reason}). Try a shorter request or check the API's safety/availability status.")
