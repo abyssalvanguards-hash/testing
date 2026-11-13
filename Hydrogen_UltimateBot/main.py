@@ -30,7 +30,7 @@ class HydrogenBot(commands.Bot):
         self.owner_ids = [int(x) for x in OWNER_IDS]
         self._synced_guilds = set()
         model = getattr(private, "GEMINI_MODEL", "gemini-3.8-flash") if private else "gemini-3.8-flash"
-        self.ai = GeminiService(AI_KEYS, model)
+        fallback_model = getattr(private, "GEMINI_FALLBACK_MODEL", "gemini-3.5-flash-lite") if private else "gemini-3.5-flash-lite"\n        self.ai = GeminiService(AI_KEYS, model, fallback_model)
 
     async def prefix_resolver(self, bot, message):
         if not message.guild:
