@@ -8,11 +8,12 @@ from core import db
 from core.logging import audit
 from core.security import is_bot_admin, safe_name
 from core.ai import AIUnavailable
+from emojis import Emoji
 
 class TicketCreateView(View):
     def __init__(self, panel_key):
         super().__init__(timeout=None); self.panel_key=panel_key
-        b=Button(label="Open Ticket",style=discord.ButtonStyle.primary,custom_id=f"hydro:ticket:create:{panel_key}")
+        b=Button(label="Open Ticket",style=discord.ButtonStyle.primary,custom_id=f"hydro:ticket:create:{panel_key}",emoji=discord.PartialEmoji.from_str(Emoji.ticket))
         b.callback=self.create; self.add_item(b)
     async def create(self, interaction):
         await open_ticket(interaction,self.panel_key)
@@ -21,9 +22,21 @@ class TicketControls(View):
     def __init__(self, bot=None):
         super().__init__(timeout=None)
         self._bot = bot
-        actions=[("Claim","success","claim"),("Close","danger","close"),("Reopen","primary","reopen"),("Add User","secondary","add"),("Remove User","secondary","remove"),("Transcript","secondary","transcript")]
-        for label,style,action in actions:
-            b=Button(label=label,style=getattr(discord.ButtonStyle,style),custom_id=f"hydro:ticket:{action}")
+        actions=[
+            ("Claim", "success", "claim", Emoji.claim),
+            ("Close", "danger", "close", Emoji.close),
+            ("Reopen", "primary", "reopen", Emoji.reopen),
+            ("Add User", "secondary", "add", Emoji.add_user),
+            ("Remove User", "secondary", "remove", Emoji.remove_user),
+            ("Transcript", "secondary", "transcript", Emoji.transcript),
+        ]
+        for label, style, action, emoji in actions:
+            b=Button(
+                label=label,
+                style=getattr(discord.ButtonStyle,style),
+                custom_id=f"hydro:ticket:{action}",
+                emoji=discord.PartialEmoji.from_str(emoji)
+            )
             b.callback=self.callback_for(action); self.add_item(b)
     def callback_for(self, action):
         async def callback(interaction):
@@ -86,7 +99,15 @@ async def open_ticket(interaction,panel_key):
     except Exception:
         await channel.delete(reason="Ticket database insert failed")
         raise
-    embed=discord.Embed(title="Support Ticket",description=f"{interaction.user.mention}, describe your issue. AI assistance is enabled when configured; staff can take over at any time.",color=discord.Color.blurple())
+    embed=discord.Embed(
+        title=f"{Emoji.ticket} Support Ticket",
+        description=(
+            f"{Emoji.welcome} {interaction.user.mention}, describe your issue below.\n"
+            f"{Emoji.ai} You can simply type your message—no mention or reply is needed.\n"
+            f"{Emoji.staff} Staff can take over at any time."
+        ),
+        color=discord.Color.blurple()
+    )
     embed.set_footer(text="WardenX Manager • Developer: @h_two_")
     await channel.send(content=f"{interaction.user.mention} {role.mention}",embed=embed,view=TicketControls(interaction.client))
     await interaction.followup.send(f"Created {channel.mention}",ephemeral=True)
@@ -123,8 +144,11 @@ class TicketCog(commands.Cog):
         panel=await db.fetchone("SELECT * FROM ticket_panels WHERE guild_id=? AND panel_key=?",(ctx.guild.id,key))
         if not panel: return await ctx.reply("Panel not found.")
         e=discord.Embed(
-            title=f"🎫 {panel['title']}",
-            description=f"💬 {panel['description']}\n\n🤖 Press the button below to open a support ticket.",
+            title=f"{Emoji.ticket} {panel['title']}",
+            description=(
+                f"{Emoji.support} {panel['description']}\n\n"
+                f"{Emoji.ai} Press the button below to open a support ticket."
+            ),
             color=discord.Color.blurple()
         )
         e.set_footer(text="WardenX Manager • Developer: @h_two_")
