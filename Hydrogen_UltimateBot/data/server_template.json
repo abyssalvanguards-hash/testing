@@ -132,6 +132,28 @@
           "type": "text"
         }
       ]
+    },
+    {
+      "name": "STAFF",
+      "staff_only": true,
+      "channels": [
+        {
+          "name": "staff chat",
+          "type": "text"
+        },
+        {
+          "name": "staff announcement",
+          "type": "text"
+        },
+        {
+          "name": "staff saves",
+          "type": "text"
+        },
+        {
+          "name": "staff vc",
+          "type": "voice"
+        }
+      ]
     }
   ],
   "roles": [
