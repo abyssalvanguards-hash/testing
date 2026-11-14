@@ -293,30 +293,11 @@ class ServerBuilder(commands.Cog):
             except discord.HTTPException:
                 continue
 
-        # Create/reuse neutral classification roles, then classify every cached member.
-        classification_roles = {}
+        # Create/reuse neutral classification roles without fetching and editing
+        # every existing member. New joins are classified by on_member_join.
         try:
             for base_name in CLASSIFICATION_ROLES:
-                classification_roles[base_name] = await self._get_or_create_role(ctx.guild, base_name)
-
-            # Force a full member list before assigning roles to every current member.
-            await ctx.guild.chunk(cache=True)
-            for member in ctx.guild.members:
-                if self.bot.user and member.id == self.bot.user.id:
-                    base_name = "WardenX"
-                elif member.bot:
-                    base_name = "Bots"
-                else:
-                    base_name = "Members"
-                target_role = classification_roles[base_name]
-                if target_role not in member.roles:
-                    try:
-                        await member.add_roles(
-                            target_role,
-                            reason="Hydrogen initial server member classification",
-                        )
-                    except (discord.Forbidden, discord.HTTPException):
-                        continue
+                await self._get_or_create_role(ctx.guild, base_name)
         except (discord.Forbidden, discord.HTTPException) as exc:
             await ctx.send(
                 f"{Emoji.warning} Server layout will continue, but classification-role setup had an error: {str(exc)[:160]}"
@@ -381,7 +362,7 @@ class ServerBuilder(commands.Cog):
             f"Categories created: {len(made_categories)}\n"
             f"Channels created: {len(made_channels)} (existing kept: {len(kept_channels)})\n"
             f"Gemini permissions were filtered; elevated permissions required your explicit approval.\n"
-            f"Classification roles: WardenX, Bots, Members (existing members classified; new joins handled automatically).\n"
+            f"Classification roles: WardenX, Bots, Members (new joins classified automatically; existing members are not bulk-edited).\n"
             f"**Verification access:** {access_note}\n"
             "Existing matching roles/channels are retained and unrelated channels are not deleted."
         )
