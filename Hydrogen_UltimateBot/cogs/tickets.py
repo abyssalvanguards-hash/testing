@@ -49,7 +49,7 @@ class TicketControls(View):
             if action=="claim":
                 if not staff: return await interaction.response.send_message("Staff only.",ephemeral=True)
                 if ticket["claimed_by"]: return await interaction.response.send_message("Already claimed.",ephemeral=True)
-                await db.execute("UPDATE tickets SET claimed_by=? WHERE id=?",(interaction.user.id,ticket["id"]))
+                await db.execute("UPDATE tickets SET claimed_by=?,ai_paused=1 WHERE id=?",(interaction.user.id,ticket["id"]))
                 await audit(interaction.client,interaction.guild,"Ticket claimed",f"Ticket #{ticket['id']}",interaction.user)
                 return await interaction.response.send_message(f"Claimed by {interaction.user.mention}.")
             if action=="close":
@@ -62,7 +62,7 @@ class TicketControls(View):
                 return await interaction.response.send_message("Ticket closed. Staff can reopen it.")
             if action=="reopen":
                 if not staff: return await interaction.response.send_message("Staff only.",ephemeral=True)
-                await db.execute("UPDATE tickets SET status='open',closed_at=NULL WHERE id=?",(ticket["id"],))
+                await db.execute("UPDATE tickets SET status='open',closed_at=NULL,claimed_by=NULL,ai_paused=0 WHERE id=?",(ticket["id"],))
                 member=interaction.guild.get_member(ticket["owner_id"])
                 if member: await interaction.channel.set_permissions(member,view_channel=True,send_messages=True,read_message_history=True)
                 return await interaction.response.send_message("Ticket reopened.")
@@ -180,6 +180,29 @@ class TicketCog(commands.Cog):
             (message.channel.id,)
         )
         if not ticket:
+            return
+
+        # Keep AI paused after a staff request or claim until the ticket is reopened.
+        if ticket.get("ai_paused") or ticket.get("claimed_by"):
+            return
+
+        staff_request = re.search(
+            r"\b(?:request(?:ing)?\s+(?:a\s+)?staff|need\s+(?:a\s+)?staff|"
+            r"talk\s+to\s+(?:a\s+)?(?:human|staff|agent)|"
+            r"speak\s+to\s+(?:a\s+)?(?:human|staff|agent)|"
+            r"human\s+(?:support|agent)|real\s+person|"
+            r"staff\s+(?:please|help)|please\s+(?:get|call|ping)\s+(?:a\s+)?staff)\b",
+            message.content,
+            re.IGNORECASE
+        )
+        if staff_request:
+            await db.execute("UPDATE tickets SET ai_paused=1 WHERE id=?", (ticket["id"],))
+            staff_role = message.guild.get_role(ticket["staff_role_id"]) if ticket["staff_role_id"] else None
+            await message.channel.send(
+                f"{Emoji.staff} {staff_role.mention if staff_role else 'Staff'}, "
+                f"{message.author.mention} requested human support. AI replies are paused for this ticket."
+            )
+            await audit(self.bot, message.guild, "Ticket staff requested", f"Ticket #{ticket['id']}", message.author)
             return
 
         # Any human message in an open ticket triggers the assistant. No mention
