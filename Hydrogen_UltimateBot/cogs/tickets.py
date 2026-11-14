@@ -122,7 +122,11 @@ class TicketCog(commands.Cog):
     async def ticket_panel(self,ctx,key):
         panel=await db.fetchone("SELECT * FROM ticket_panels WHERE guild_id=? AND panel_key=?",(ctx.guild.id,key))
         if not panel: return await ctx.reply("Panel not found.")
-        e=discord.Embed(title=panel["title"],description=panel["description"],color=discord.Color.blurple())
+        e=discord.Embed(
+            title=f"🎫 {panel['title']}",
+            description=f"💬 {panel['description']}\n\n🤖 Press the button below to open a support ticket.",
+            color=discord.Color.blurple()
+        )
         e.set_footer(text="WardenX Manager • Developer: @h_two_")
         await ctx.send(embed=e,view=TicketCreateView(key))
     @commands.hybrid_command(name="ticket_add")
