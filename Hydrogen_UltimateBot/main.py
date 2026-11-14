@@ -42,7 +42,7 @@ class HydrogenBot(commands.Bot):
         await db.init_db()
         extensions = [
             "core_admin", "tickets", "applications", "moderation", "community",
-            "payments", "slots", "setup_wizard", "ai_server_manager",
+            "payments", "setup_wizard", "ai_server_manager",
             "gemini_admin", "invite_rewards", "server_builder", "server_care", "panel_connector"
         ]
         for name in extensions:
