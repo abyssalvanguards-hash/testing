@@ -1,3 +1,4 @@
+import asyncio
 import discord, io, re
 from discord.ext import commands
 from discord.ui import View, Button, Modal, TextInput, UserSelect
@@ -102,7 +103,9 @@ async def send_transcript(interaction):
     await interaction.response.send_message("Transcript generated.",file=file,ephemeral=True)
 
 class TicketCog(commands.Cog):
-    def __init__(self,bot): self.bot=bot
+    def __init__(self,bot):
+        self.bot=bot
+        self._ticket_locks = {}
     @commands.hybrid_command(name="ticketconfig")
     async def ticket_config(self,ctx,key,category:discord.CategoryChannel,staff_role:discord.Role,*,content):
         if not await is_bot_admin(ctx.author,self.bot.owner_ids): return await ctx.reply("Permission denied.")
@@ -141,31 +144,67 @@ class TicketCog(commands.Cog):
         await audit(self.bot,ctx.guild,"Ticket member removed",f"{member.mention} from {ctx.channel.mention}",ctx.author)
         await ctx.reply(f"Removed {member.mention}.")
     @commands.Cog.listener()
-    async def on_message(self,message):
-        if message.author.bot or not message.guild: return
-        t=await db.fetchone("SELECT * FROM tickets WHERE channel_id=? AND status='open'",(message.channel.id,))
-        if not t or not self.bot.ai: return
-        # AI only responds when explicitly mentioned to avoid unsolicited replies.
-        if self.bot.user not in message.mentions: return
-        history=[]
-        async for m in message.channel.history(limit=AI_MAX_TICKET_HISTORY_MESSAGES,oldest_first=True):
-            if m.content: history.append(f"{m.author.display_name}: {m.content[:800]}")
-        prompt=("You are WardenX Manager support assistant. Be concise, safe, and helpful. "
-                "Never approve refunds, payments, bans, role grants, or policy exceptions. "
-                "Escalate uncertain or account-specific actions to staff.\n\n"+"\n".join(history))
-        try:
-            answer=await self.bot.ai.ask(prompt,message.guild.id,message.author.id,"ticket")
-            await message.reply(answer,mention_author=False)
-        except AIUnavailable as exc:
-            await message.channel.send(f"AI unavailable — staff handoff required: `{exc}`")
-            staff=message.guild.get_role(t["staff_role_id"]) if t["staff_role_id"] else None
-            if staff: await message.channel.send(f"{staff.mention} please assist.")
-            owner_ids=self.bot.owner_ids
-            for oid in owner_ids:
-                try:
-                    u=self.bot.get_user(oid) or await self.bot.fetch_user(oid)
-                    await u.send(f"Hydrogen AI handoff in {message.guild.name} / #{message.channel.name}: {exc}")
-                except discord.HTTPException: pass
+    async def on_message(self, message):
+        if message.author.bot or not message.guild or not self.bot.ai:
+            return
+
+        ticket = await db.fetchone(
+            "SELECT * FROM tickets WHERE channel_id=? AND status='open'",
+            (message.channel.id,)
+        )
+        if not ticket:
+            return
+
+        # Any human message in an open ticket triggers the assistant. No mention
+        # or reply-to-bot is required.
+        lock = self._ticket_locks.setdefault(message.channel.id, asyncio.Lock())
+        if lock.locked():
+            return
+
+        async with lock:
+            try:
+                history = []
+                # Keep context short and fetch newest messages first to reduce
+                # Discord history overhead, then restore chronological order.
+                limit = max(4, min(int(AI_MAX_TICKET_HISTORY_MESSAGES), 12))
+                async for item in message.channel.history(limit=limit, oldest_first=False):
+                    if item.content:
+                        history.append(f"{item.author.display_name}: {item.content[:600]}")
+                history.reverse()
+
+                prompt = (
+                    "You are WardenX Manager, the support assistant in a Discord ticket. "
+                    "Reply directly to the latest user message. Be concise, clear, and helpful. "
+                    "Users do not need to mention or reply to you. "
+                    "Never approve refunds, payments, bans, role grants, or policy exceptions. "
+                    "Escalate uncertain or account-specific actions to staff.\n\n"
+                    + "\n".join(history)
+                )
+
+                async with message.channel.typing():
+                    answer = await self.bot.ai.ask(
+                        prompt, message.guild.id, message.author.id, "ticket"
+                    )
+                await message.reply(answer, mention_author=False)
+
+            except AIUnavailable as exc:
+                await message.channel.send(
+                    f"AI unavailable — staff handoff required: `{exc}`"
+                )
+                staff = message.guild.get_role(ticket["staff_role_id"]) if ticket["staff_role_id"] else None
+                if staff:
+                    await message.channel.send(f"{staff.mention} please assist.")
+                for owner_id in self.bot.owner_ids:
+                    try:
+                        user = self.bot.get_user(owner_id) or await self.bot.fetch_user(owner_id)
+                        await user.send(
+                            f"WardenX AI handoff in {message.guild.name} / "
+                            f"#{message.channel.name}: {exc}"
+                        )
+                    except discord.HTTPException:
+                        pass
+            except discord.HTTPException:
+                return
     async def cog_load(self):
         # Persistent views are registered in bot.setup_hook after DB init.
         pass
