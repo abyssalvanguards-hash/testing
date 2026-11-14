@@ -61,13 +61,31 @@ class ApplicationReview(View):
             result="Decision saved."
             if decision=="approved":
                 role_id=await db.get_setting(interaction.guild.id,"staff_role_id")
-                role=interaction.guild.get_role(role_id) if role_id else None
+                role=interaction.guild.get_role(int(role_id)) if role_id else None
                 member=interaction.guild.get_member(app["user_id"])
-                if role and member and role < interaction.guild.me.top_role:
-                    try: await member.add_roles(role,reason=f"Application #{self.app_id} approved by owner")
-                    except discord.HTTPException: result="Approved, but role assignment failed; check bot role hierarchy."
-                else: result="Approved; configure staff role or check role hierarchy/member presence."
-                if role and member and result=="Decision saved.": result=f"Approved and assigned {role.mention}."
+                if member is None:
+                    try:
+                        member=await interaction.guild.fetch_member(int(app["user_id"]))
+                    except discord.NotFound:
+                        result="Approved, but the applicant is no longer in this server; no staff role was assigned."
+                    except discord.HTTPException:
+                        result="Approved, but I could not retrieve the applicant. Check the bot's Server Members Intent and try again."
+                if role is None:
+                    result="Approved, but no valid staff role is configured. Run /setstaffrole and select the staff role."
+                elif member is not None:
+                    bot_member=interaction.guild.me
+                    if not interaction.guild.me.guild_permissions.manage_roles:
+                        result="Approved, but I need the Manage Roles permission to assign the staff role."
+                    elif role.managed or role >= bot_member.top_role:
+                        result="Approved, but the staff role is above or equal to my highest role. Move my bot role above it in Server Settings → Roles."
+                    else:
+                        try:
+                            await member.add_roles(role,reason=f"Application #{self.app_id} approved by owner")
+                            result=f"Approved and assigned {role.mention}."
+                        except discord.Forbidden:
+                            result="Approved, but Discord denied role assignment. Check Manage Roles permission and role hierarchy."
+                        except discord.HTTPException as exc:
+                            result=f"Approved, but Discord could not assign the role ({exc}). Check bot permissions and try again."
             await interaction.response.send_message(result,ephemeral=True)
             for item in self.children: item.disabled=True
             await interaction.message.edit(view=self)
@@ -85,5 +103,16 @@ class Applications(commands.Cog):
         if not await is_bot_admin(ctx.author,self.bot.owner_ids): return await ctx.reply("Permission denied.")
         await db.set_setting(ctx.guild.id,"review_channel_id",channel.id)
         await ctx.reply(f"Application review channel set to {channel.mention}.")
+
+    @commands.hybrid_command(name="setstaffrole")
+    async def set_staff_role(self,ctx,role:discord.Role):
+        if not await is_bot_admin(ctx.author,self.bot.owner_ids): return await ctx.reply("Permission denied.")
+        bot_member=ctx.guild.me
+        if role.managed or role >= bot_member.top_role:
+            return await ctx.reply("I cannot assign that role. Move my bot role above the selected staff role, then run this command again.")
+        if not bot_member.guild_permissions.manage_roles:
+            return await ctx.reply("I need the Manage Roles permission before a staff role can be configured.")
+        await db.set_setting(ctx.guild.id,"staff_role_id",role.id)
+        await ctx.reply(f"Staff application role set to {role.mention}.")
 async def setup(bot):
     await bot.add_cog(Applications(bot)); bot.add_view(ApplyPanel())

@@ -1,0 +1,12 @@
+{
+  "guilds": {
+    "YOUR_TEST_GUILD_ID": {
+      "verified_role_id": "YOUR_VERIFIED_ROLE_ID",
+      "verification_channel_id": "YOUR_VERIFICATION_CHANNEL_ID",
+      "protected_channel_ids": [
+        "YOUR_PROTECTED_CHANNEL_ID_1",
+        "YOUR_PROTECTED_CHANNEL_ID_2"
+      ]
+    }
+  }
+}

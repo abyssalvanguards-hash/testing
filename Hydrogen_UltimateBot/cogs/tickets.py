@@ -1,3 +1,4 @@
+import asyncio
 import discord, io, re
 from discord.ext import commands
 from discord.ui import View, Button, Modal, TextInput, UserSelect
@@ -7,11 +8,12 @@ from core import db
 from core.logging import audit
 from core.security import is_bot_admin, safe_name
 from core.ai import AIUnavailable
+from emojis import Emoji
 
 class TicketCreateView(View):
     def __init__(self, panel_key):
         super().__init__(timeout=None); self.panel_key=panel_key
-        b=Button(label="Open Ticket",style=discord.ButtonStyle.primary,custom_id=f"hydro:ticket:create:{panel_key}")
+        b=Button(label="Open Ticket",style=discord.ButtonStyle.primary,custom_id=f"hydro:ticket:create:{panel_key}",emoji=discord.PartialEmoji.from_str(Emoji.ticket))
         b.callback=self.create; self.add_item(b)
     async def create(self, interaction):
         await open_ticket(interaction,self.panel_key)
@@ -20,9 +22,21 @@ class TicketControls(View):
     def __init__(self, bot=None):
         super().__init__(timeout=None)
         self._bot = bot
-        actions=[("Claim","success","claim"),("Close","danger","close"),("Reopen","primary","reopen"),("Add User","secondary","add"),("Remove User","secondary","remove"),("Transcript","secondary","transcript")]
-        for label,style,action in actions:
-            b=Button(label=label,style=getattr(discord.ButtonStyle,style),custom_id=f"hydro:ticket:{action}")
+        actions=[
+            ("Claim", "success", "claim", Emoji.claim),
+            ("Close", "danger", "close", Emoji.close),
+            ("Reopen", "primary", "reopen", Emoji.reopen),
+            ("Add User", "secondary", "add", Emoji.add_user),
+            ("Remove User", "secondary", "remove", Emoji.remove_user),
+            ("Transcript", "secondary", "transcript", Emoji.transcript),
+        ]
+        for label, style, action, emoji in actions:
+            b=Button(
+                label=label,
+                style=getattr(discord.ButtonStyle,style),
+                custom_id=f"hydro:ticket:{action}",
+                emoji=discord.PartialEmoji.from_str(emoji)
+            )
             b.callback=self.callback_for(action); self.add_item(b)
     def callback_for(self, action):
         async def callback(interaction):
@@ -35,7 +49,7 @@ class TicketControls(View):
             if action=="claim":
                 if not staff: return await interaction.response.send_message("Staff only.",ephemeral=True)
                 if ticket["claimed_by"]: return await interaction.response.send_message("Already claimed.",ephemeral=True)
-                await db.execute("UPDATE tickets SET claimed_by=? WHERE id=?",(interaction.user.id,ticket["id"]))
+                await db.execute("UPDATE tickets SET claimed_by=?,ai_paused=1 WHERE id=?",(interaction.user.id,ticket["id"]))
                 await audit(interaction.client,interaction.guild,"Ticket claimed",f"Ticket #{ticket['id']}",interaction.user)
                 return await interaction.response.send_message(f"Claimed by {interaction.user.mention}.")
             if action=="close":
@@ -48,7 +62,7 @@ class TicketControls(View):
                 return await interaction.response.send_message("Ticket closed. Staff can reopen it.")
             if action=="reopen":
                 if not staff: return await interaction.response.send_message("Staff only.",ephemeral=True)
-                await db.execute("UPDATE tickets SET status='open',closed_at=NULL WHERE id=?",(ticket["id"],))
+                await db.execute("UPDATE tickets SET status='open',closed_at=NULL,claimed_by=NULL,ai_paused=0 WHERE id=?",(ticket["id"],))
                 member=interaction.guild.get_member(ticket["owner_id"])
                 if member: await interaction.channel.set_permissions(member,view_channel=True,send_messages=True,read_message_history=True)
                 return await interaction.response.send_message("Ticket reopened.")
@@ -85,8 +99,16 @@ async def open_ticket(interaction,panel_key):
     except Exception:
         await channel.delete(reason="Ticket database insert failed")
         raise
-    embed=discord.Embed(title="Support Ticket",description=f"{interaction.user.mention}, describe your issue. AI assistance is enabled when configured; staff can take over at any time.",color=discord.Color.blurple())
-    embed.set_footer(text="Hydrogen UltimateBot • Made by Hydrogen")
+    embed=discord.Embed(
+        title=f"{Emoji.ticket} Support Ticket",
+        description=(
+            f"{Emoji.welcome} {interaction.user.mention}, describe your issue below.\n"
+            f"{Emoji.ai} You can simply type your message—no mention or reply is needed.\n"
+            f"{Emoji.staff} Staff can take over at any time."
+        ),
+        color=discord.Color.blurple()
+    )
+    embed.set_footer(text="WardenX Manager • Developer: @h_two_")
     await channel.send(content=f"{interaction.user.mention} {role.mention}",embed=embed,view=TicketControls(interaction.client))
     await interaction.followup.send(f"Created {channel.mention}",ephemeral=True)
     await audit(interaction.client,interaction.guild,"Ticket opened",f"{channel.mention} • panel {panel_key}",interaction.user)
@@ -102,7 +124,8 @@ async def send_transcript(interaction):
     await interaction.response.send_message("Transcript generated.",file=file,ephemeral=True)
 
 class TicketCog(commands.Cog):
-    def __init__(self,bot): self.bot=bot
+    def __init__(self,bot):
+        self.bot=bot
     @commands.hybrid_command(name="ticketconfig")
     async def ticket_config(self,ctx,key,category:discord.CategoryChannel,staff_role:discord.Role,*,content):
         if not await is_bot_admin(ctx.author,self.bot.owner_ids): return await ctx.reply("Permission denied.")
@@ -120,8 +143,15 @@ class TicketCog(commands.Cog):
     async def ticket_panel(self,ctx,key):
         panel=await db.fetchone("SELECT * FROM ticket_panels WHERE guild_id=? AND panel_key=?",(ctx.guild.id,key))
         if not panel: return await ctx.reply("Panel not found.")
-        e=discord.Embed(title=panel["title"],description=panel["description"],color=discord.Color.blurple())
-        e.set_footer(text="Hydrogen UltimateBot • Made by Hydrogen")
+        e=discord.Embed(
+            title=f"{Emoji.ticket} {panel['title']}",
+            description=(
+                f"{Emoji.support} {panel['description']}\n\n"
+                f"{Emoji.ai} Press the button below to open a support ticket."
+            ),
+            color=discord.Color.blurple()
+        )
+        e.set_footer(text="WardenX Manager • Developer: @h_two_")
         await ctx.send(embed=e,view=TicketCreateView(key))
     @commands.hybrid_command(name="ticket_add")
     async def ticket_add(self,ctx,member:discord.Member):
@@ -141,31 +171,93 @@ class TicketCog(commands.Cog):
         await audit(self.bot,ctx.guild,"Ticket member removed",f"{member.mention} from {ctx.channel.mention}",ctx.author)
         await ctx.reply(f"Removed {member.mention}.")
     @commands.Cog.listener()
-    async def on_message(self,message):
-        if message.author.bot or not message.guild: return
-        t=await db.fetchone("SELECT * FROM tickets WHERE channel_id=? AND status='open'",(message.channel.id,))
-        if not t or not self.bot.ai: return
-        # AI only responds when explicitly mentioned to avoid unsolicited replies.
-        if self.bot.user not in message.mentions: return
-        history=[]
-        async for m in message.channel.history(limit=AI_MAX_TICKET_HISTORY_MESSAGES,oldest_first=True):
-            if m.content: history.append(f"{m.author.display_name}: {m.content[:800]}")
-        prompt=("You are Hydrogen support assistant. Be concise, safe, and helpful. "
-                "Never approve refunds, payments, bans, role grants, or policy exceptions. "
-                "Escalate uncertain or account-specific actions to staff.\n\n"+"\n".join(history))
+    async def on_message(self, message):
+        if message.author.bot or not message.guild or not self.bot.ai:
+            return
+
+        ticket = await db.fetchone(
+            "SELECT * FROM tickets WHERE channel_id=? AND status='open'",
+            (message.channel.id,)
+        )
+        if not ticket:
+            return
+
+        # Keep AI paused after a staff request or claim until the ticket is reopened.
+        if ticket.get("ai_paused") or ticket.get("claimed_by"):
+            return
+
+        staff_request = re.search(
+            r"\b(?:"
+            r"request(?:ing)?\s+(?:a\s+)?staff|"
+            r"need\s+(?:a\s+)?staff|"
+            r"talk\s+to\s+(?:a\s+)?(?:human|staff|agent)|"
+            r"speak\s+to\s+(?:a\s+)?(?:human|staff|agent)|"
+            r"human\s+(?:support|agent)|real\s+person|"
+            r"staff\s+(?:please|help)|"
+            r"(?:can|could|may)\s+i\s+(?:talk|speak)\s+to\s+(?:a\s+)?staff|"
+            r"(?:get|call|ping)\s+(?:me\s+)?(?:a\s+)?staff|"
+            r"please\s+(?:get|call|ping)\s+(?:a\s+)?staff|"
+            r"human\s+help|"
+            r"escalate\s+(?:this\s+)?(?:to\s+)?staff"
+            r")\b",
+            message.content,
+            re.IGNORECASE
+        )
+        if staff_request:
+            await db.execute("UPDATE tickets SET ai_paused=1 WHERE id=?", (ticket["id"],))
+            staff_role = message.guild.get_role(ticket["staff_role_id"]) if ticket["staff_role_id"] else None
+            await message.channel.send(
+                f"{Emoji.staff} {staff_role.mention if staff_role else 'Staff'}, "
+                f"{message.author.mention} requested human support. AI replies are paused for this ticket."
+            )
+            await audit(self.bot, message.guild, "Ticket staff requested", f"Ticket #{ticket['id']}", message.author)
+            return
+
+        # Any human message in an open ticket triggers the assistant. No mention
+        # or reply-to-bot is required.
         try:
-            answer=await self.bot.ai.ask(prompt,message.guild.id,message.author.id,"ticket")
-            await message.reply(answer,mention_author=False)
+            history = []
+            # Keep context short and fetch newest messages first to reduce
+            # Discord history overhead, then restore chronological order.
+            limit = max(4, min(int(AI_MAX_TICKET_HISTORY_MESSAGES), 12))
+            async for item in message.channel.history(limit=limit, oldest_first=False):
+                if item.content:
+                    history.append(f"{item.author.display_name}: {item.content[:600]}")
+            history.reverse()
+
+            prompt = (
+                "You are WardenX Manager, the support assistant in a Discord ticket. "
+                "Reply directly to the latest user message. Be concise, clear, and helpful. "
+                "Users do not need to mention or reply to you. "
+                "Never approve refunds, payments, bans, role grants, or policy exceptions. "
+                "Escalate uncertain or account-specific actions to staff.\n\n"
+                + "\n".join(history)
+            )
+
+            async with message.channel.typing():
+                answer = await self.bot.ai.ask(
+                    prompt, message.guild.id, message.author.id, "ticket"
+                )
+            await message.reply(answer, mention_author=False)
+
         except AIUnavailable as exc:
-            await message.channel.send(f"AI unavailable — staff handoff required: `{exc}`")
-            staff=message.guild.get_role(t["staff_role_id"]) if t["staff_role_id"] else None
-            if staff: await message.channel.send(f"{staff.mention} please assist.")
-            owner_ids=self.bot.owner_ids
-            for oid in owner_ids:
+            await message.channel.send(
+                f"AI unavailable — staff handoff required: `{exc}`"
+            )
+            staff = message.guild.get_role(ticket["staff_role_id"]) if ticket["staff_role_id"] else None
+            if staff:
+                await message.channel.send(f"{staff.mention} please assist.")
+            for owner_id in self.bot.owner_ids:
                 try:
-                    u=self.bot.get_user(oid) or await self.bot.fetch_user(oid)
-                    await u.send(f"Hydrogen AI handoff in {message.guild.name} / #{message.channel.name}: {exc}")
-                except discord.HTTPException: pass
+                    user = self.bot.get_user(owner_id) or await self.bot.fetch_user(owner_id)
+                    await user.send(
+                        f"WardenX AI handoff in {message.guild.name} / "
+                        f"#{message.channel.name}: {exc}"
+                    )
+                except discord.HTTPException:
+                    pass
+        except discord.HTTPException:
+            return
     async def cog_load(self):
         # Persistent views are registered in bot.setup_hook after DB init.
         pass

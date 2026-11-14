@@ -1,5 +1,5 @@
 HYDROGEN ULTIMATEBOT — UPGRADED BUILD
-Made by Hydrogen
+Developer: @h_two_
 
 1. Extract this ZIP.
 2. Open the Hydrogen_UltimateBot folder.

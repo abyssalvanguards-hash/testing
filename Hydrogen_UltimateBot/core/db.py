@@ -50,6 +50,13 @@ CREATE TABLE IF NOT EXISTS invite_counts (
  guild_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
  joins INTEGER DEFAULT 0, PRIMARY KEY(guild_id,user_id)
 );
+CREATE TABLE IF NOT EXISTS invite_rewards (
+ guild_id INTEGER NOT NULL,
+ invite_threshold INTEGER NOT NULL,
+ role_id INTEGER NOT NULL,
+ dm_message TEXT,
+ PRIMARY KEY(guild_id, invite_threshold)
+);
 CREATE TABLE IF NOT EXISTS invoices (
  id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id INTEGER NOT NULL,
  user_id INTEGER NOT NULL, method TEXT NOT NULL, amount REAL NOT NULL,
@@ -68,6 +75,15 @@ CREATE TABLE IF NOT EXISTS server_change_plans (
 CREATE TABLE IF NOT EXISTS used_payment_txids (
  txid TEXT PRIMARY KEY, invoice_id INTEGER NOT NULL, guild_id INTEGER NOT NULL, used_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS busy_states (
+ guild_id INTEGER PRIMARY KEY, owner_id INTEGER NOT NULL,
+ expires_at TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS server_backups (
+ id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id INTEGER NOT NULL,
+ created_by INTEGER NOT NULL, file_path TEXT NOT NULL,
+ created_at TEXT NOT NULL, description TEXT
+);
 CREATE TABLE IF NOT EXISTS ai_usage (
  id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id INTEGER,
  user_id INTEGER, purpose TEXT, created_at TEXT NOT NULL
@@ -78,14 +94,25 @@ async def init_db():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     async with aiosqlite.connect(DB_PATH) as db:
         await db.executescript(SCHEMA)
-        # Upgrade old built-in prefix values without overriding custom prefixes.
         await db.execute("UPDATE guild_settings SET prefix=? WHERE prefix=?", ("$", "!"))
-        # Safe additive migrations for existing databases.
         cols = {row[1] for row in await (await db.execute("PRAGMA table_info(invoices)")).fetchall()}
         if "txid" not in cols:
             await db.execute("ALTER TABLE invoices ADD COLUMN txid TEXT")
         if "confirmations" not in cols:
             await db.execute("ALTER TABLE invoices ADD COLUMN confirmations INTEGER DEFAULT 0")
+        # Ticket AI handoff is additive for existing databases.
+        ticket_cols = {row[1] for row in await (await db.execute("PRAGMA table_info(tickets)")).fetchall()}
+        if "ai_paused" not in ticket_cols:
+            await db.execute("ALTER TABLE tickets ADD COLUMN ai_paused INTEGER DEFAULT 0")
+        # Slot recovery columns are additive so existing installations keep their data.
+        slot_cols = {row[1] for row in await (await db.execute("PRAGMA table_info(slots)")).fetchall()}
+        for column, definition in {
+            "locked": "INTEGER DEFAULT 0",
+            "recovery_hash": "TEXT",
+            "recovery_expires": "TEXT"
+        }.items():
+            if column not in slot_cols:
+                await db.execute(f"ALTER TABLE slots ADD COLUMN {column} {definition}")
         await db.commit()
 
 async def execute(query, params=()):
@@ -111,6 +138,14 @@ async def ensure_guild(guild_id):
     await execute("INSERT OR IGNORE INTO guild_settings(guild_id) VALUES(?)", (guild_id,))
 
 async def get_setting(guild_id, key, default=None):
+    allowed = {
+        "prefix", "log_channel_id", "review_channel_id", "staff_role_id",
+        "admin_role_id", "mod_role_id", "welcome_channel_id", "goodbye_channel_id",
+        "ticket_transcript_channel_id", "excluded_category_id", "upi_id", "upi_payee",
+        "ltc_address", "btc_address", "channel_template"
+    }
+    if key not in allowed:
+        raise ValueError("Unsupported setting")
     await ensure_guild(guild_id)
     row = await fetchone(f"SELECT {key} AS value FROM guild_settings WHERE guild_id=?", (guild_id,))
     return row["value"] if row and row["value"] is not None else default
