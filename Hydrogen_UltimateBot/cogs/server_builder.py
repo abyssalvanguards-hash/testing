@@ -304,11 +304,42 @@ class ServerBuilder(commands.Cog):
             )
 
         verified_role = ctx.guild.get_role(snowflake(access_config.get("verified_role_id")))
+        staff_role_names = {
+            "Founder", "Owner", "Manager", "Admin", "Senior Manager",
+            "Senior Moderator", "Moderator", "Senior Staff", "Staff", "Trial Staff",
+        }
         for category_spec in template["categories"]:
             formatted_category = category_name(category_spec["name"])
+            is_staff_only = bool(category_spec.get("staff_only"))
             category = discord.utils.get(ctx.guild.categories, name=formatted_category)
-            if category is None:
-                # New builder categories are private by default, not accidentally public.
+
+            if is_staff_only:
+                staff_roles = [
+                    role for role in ctx.guild.roles
+                    if role.name in {role_name(base) for base in staff_role_names}
+                ]
+                staff_overwrites = {
+                    ctx.guild.default_role: discord.PermissionOverwrite(view_channel=False),
+                    me: discord.PermissionOverwrite(view_channel=True, manage_channels=True),
+                }
+                for role in staff_roles:
+                    staff_overwrites[role] = discord.PermissionOverwrite(view_channel=True)
+                if category is None:
+                    try:
+                        category = await ctx.guild.create_category(
+                            formatted_category, overwrites=staff_overwrites,
+                            reason=f"WardenX Manager staff-only category requested by {ctx.author}")
+                        made_categories.append(formatted_category)
+                    except discord.HTTPException:
+                        continue
+                else:
+                    try:
+                        await category.edit(overwrites=staff_overwrites,
+                            reason="Apply WardenX Manager staff-only category permissions")
+                    except discord.HTTPException:
+                        continue
+            elif category is None:
+                # General builder categories are private to verified members by default.
                 overwrites = {
                     ctx.guild.default_role: discord.PermissionOverwrite(view_channel=False),
                     me: discord.PermissionOverwrite(view_channel=True, manage_channels=True)
@@ -322,24 +353,36 @@ class ServerBuilder(commands.Cog):
                     made_categories.append(formatted_category)
                 except discord.HTTPException:
                     continue
+
             for spec in category_spec["channels"]:
                 name = channel_name(spec["name"])
                 channels = category.voice_channels if spec["type"] == "voice" else category.text_channels
-                if discord.utils.get(channels, name=name):
+                existing_channel = discord.utils.get(channels, name=name)
+                if existing_channel:
                     kept_channels.append(name)
+                    if is_staff_only:
+                        try:
+                            await existing_channel.edit(sync_permissions=True,
+                                reason="Sync staff channel with staff-only category permissions")
+                        except discord.HTTPException:
+                            pass
                     continue
                 try:
+                    if is_staff_only:
+                        channel_overwrites = staff_overwrites
+                    else:
+                        channel_overwrites = {
+                            ctx.guild.default_role: discord.PermissionOverwrite(view_channel=False),
+                            me: discord.PermissionOverwrite(view_channel=True),
+                            **({verified_role: discord.PermissionOverwrite(view_channel=True)} if verified_role else {})
+                        }
                     if spec["type"] == "voice":
                         await ctx.guild.create_voice_channel(name, category=category,
-                            overwrites={ctx.guild.default_role: discord.PermissionOverwrite(view_channel=False),
-                                        me: discord.PermissionOverwrite(view_channel=True),
-                                        **({verified_role: discord.PermissionOverwrite(view_channel=True)} if verified_role else {})},
+                            overwrites=channel_overwrites,
                             reason=f"WardenX Manager server builder requested by {ctx.author}")
                     else:
                         await ctx.guild.create_text_channel(name, category=category,
-                            overwrites={ctx.guild.default_role: discord.PermissionOverwrite(view_channel=False),
-                                        me: discord.PermissionOverwrite(view_channel=True),
-                                        **({verified_role: discord.PermissionOverwrite(view_channel=True)} if verified_role else {})},
+                            overwrites=channel_overwrites,
                             reason=f"WardenX Manager server builder requested by {ctx.author}")
                     made_channels.append(name)
                 except discord.HTTPException:
