@@ -187,11 +187,19 @@ class TicketCog(commands.Cog):
             return
 
         staff_request = re.search(
-            r"\b(?:request(?:ing)?\s+(?:a\s+)?staff|need\s+(?:a\s+)?staff|"
+            r"\b(?:"
+            r"request(?:ing)?\s+(?:a\s+)?staff|"
+            r"need\s+(?:a\s+)?staff|"
             r"talk\s+to\s+(?:a\s+)?(?:human|staff|agent)|"
             r"speak\s+to\s+(?:a\s+)?(?:human|staff|agent)|"
             r"human\s+(?:support|agent)|real\s+person|"
-            r"staff\s+(?:please|help)|please\s+(?:get|call|ping)\s+(?:a\s+)?staff)\b",
+            r"staff\s+(?:please|help)|"
+            r"(?:can|could|may)\s+i\s+(?:talk|speak)\s+to\s+(?:a\s+)?staff|"
+            r"(?:get|call|ping)\s+(?:me\s+)?(?:a\s+)?staff|"
+            r"please\s+(?:get|call|ping)\s+(?:a\s+)?staff|"
+            r"human\s+help|"
+            r"escalate\s+(?:this\s+)?(?:to\s+)?staff"
+            r")\b",
             message.content,
             re.IGNORECASE
         )
