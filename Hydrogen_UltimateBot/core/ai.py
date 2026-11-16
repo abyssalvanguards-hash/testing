@@ -16,11 +16,11 @@ class AIUnavailable(Exception):
 
 
 class GeminiService:
-    def __init__(self, keys, model="gemini-3.8-flash", fallback_model="gemini-3.5-flash-lite"):
+    def __init__(self, keys, model=None, fallback_model=None):
         if isinstance(keys, str):
             keys = [keys]
         self.keys = [str(k).strip() for k in (keys or []) if k and "PASTE_" not in str(k)]
-        self.model = model or "gemini-3.8-flash"
+        self.model = (model or "").strip() or None
         self.fallback_model = (fallback_model or "").strip() or None
         self.selection_file = Path(__file__).resolve().parents[1] / "data" / "gemini_selection.json"
         self.active_key_index = 0
@@ -74,6 +74,8 @@ class GeminiService:
             "contents": [{"role": "user", "parts": [{"text": str(prompt)}]}],
             "generationConfig": {"temperature": 0.2, "maxOutputTokens": 4096}
         }
+        if not self.model:
+            raise AIUnavailable("Gemini model is not configured. Set ai.model in config.json after choosing a supported model.")
         models = [self.model]
         if self.fallback_model and self.fallback_model != self.model:
             models.append(self.fallback_model)
