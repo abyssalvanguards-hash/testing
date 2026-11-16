@@ -7,8 +7,8 @@
   },
   "ai": {
     "provider": "google_gemini",
-    "model": "gemini-3.8-flash",
-    "fallback_model": "gemini-3.5-flash-lite",
+    "model": "",
+    "fallback_model": "",
     "key_selection": "manual",
     "notify_owner_on_key_auth_failure": true,
     "notify_owner_on_quota_exhaustion": true
