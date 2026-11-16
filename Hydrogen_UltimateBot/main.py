@@ -1,4 +1,5 @@
-import asyncio, os, logging
+import asyncio, os, logging, json
+from pathlib import Path
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -15,7 +16,19 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 TOKEN = getattr(private, "DISCORD_TOKEN", None) or os.getenv("DISCORD_TOKEN")
-OWNER_IDS = getattr(private, "OWNER_IDS", []) if private else []
+CONFIG_PATH = Path(__file__).with_name("config.json")
+try:
+    BOT_CONFIG = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+except (OSError, json.JSONDecodeError):
+    BOT_CONFIG = {}
+
+OWNER_IDS = list(dict.fromkeys(
+    [int(x) for x in (getattr(private, "OWNER_IDS", []) if private else [])]
+    + [int(x) for x in BOT_CONFIG.get("owners", {}).get("user_ids", [])]
+))
+API_KEY_MODERATOR_IDS = {
+    int(x) for x in BOT_CONFIG.get("permissions", {}).get("api_key_moderator_user_ids", [])
+}
 AI_KEYS = getattr(private, "GEMINI_API_KEYS", []) if private else []
 
 
@@ -29,8 +42,10 @@ class HydrogenBot(commands.Bot):
         super().__init__(command_prefix=self.prefix_resolver, intents=intents, help_command=None)
         self.owner_ids = [int(x) for x in OWNER_IDS]
         self._synced_guilds = set()
-        model = getattr(private, "GEMINI_MODEL", "gemini-3.8-flash") if private else "gemini-3.8-flash"
-        fallback_model = getattr(private, "GEMINI_FALLBACK_MODEL", "gemini-3.5-flash-lite") if private else "gemini-3.5-flash-lite"
+        ai_config = BOT_CONFIG.get("ai", {})
+        model = ai_config.get("model") or (getattr(private, "GEMINI_MODEL", "gemini-3.8-flash") if private else "gemini-3.8-flash")
+        fallback_model = ai_config.get("fallback_model") or (getattr(private, "GEMINI_FALLBACK_MODEL", "gemini-3.5-flash-lite") if private else "gemini-3.5-flash-lite")
+        self.api_key_moderator_ids = set(API_KEY_MODERATOR_IDS)
         self.ai = GeminiService(AI_KEYS, model, fallback_model)
 
     async def prefix_resolver(self, bot, message):
