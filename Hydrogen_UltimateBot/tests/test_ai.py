@@ -71,7 +71,7 @@ def test_primary_timeout_uses_fallback_model():
 
 
 def test_primary_503_retries_then_uses_fallback():
-    service = GeminiService(["test-api-key"])
+    service = GeminiService(["test-api-key"], model="test-primary-model", fallback_model="test-fallback-model")
     overloaded = FakeResponse(503, {"error": {"message": "busy"}})
     session = FakeSession([overloaded, overloaded, success_response("fallback after 503")])
 
