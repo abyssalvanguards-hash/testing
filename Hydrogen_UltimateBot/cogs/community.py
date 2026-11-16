@@ -25,7 +25,8 @@ class Community(commands.Cog):
                 ),
                 color=discord.Color.blurple()
             )
-            embed.set_thumbnail(url=member.guild.icon.url if member.guild.icon else discord.Embed.Empty)
+            if member.guild.icon:
+                embed.set_thumbnail(url=member.guild.icon.url)
             embed.add_field(
                 name="Useful commands",
                 value="`/rank` — view your activity level\n`/leaderboard` — see the server leaderboard",
