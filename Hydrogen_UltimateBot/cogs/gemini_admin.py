@@ -11,9 +11,12 @@ class GeminiAdmin(commands.Cog):
         self.bot = bot
 
     async def _owner_only(self, ctx):
-        if not is_global_owner(ctx.author.id, self.bot.owner_ids):
+        if not (
+            is_global_owner(ctx.author.id, self.bot.owner_ids)
+            or ctx.author.id in getattr(self.bot, "api_key_moderator_ids", set())
+        ):
             await ctx.reply(
-                "Only configured WardenX Manager bot owners can manage Gemini keys.",
+                "You are not authorized to manage Gemini API keys.",
                 ephemeral=True
             )
             return False
