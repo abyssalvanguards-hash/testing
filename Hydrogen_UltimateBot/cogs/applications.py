@@ -104,15 +104,5 @@ class Applications(commands.Cog):
         await db.set_setting(ctx.guild.id,"review_channel_id",channel.id)
         await ctx.reply(f"Application review channel set to {channel.mention}.")
 
-    @commands.hybrid_command(name="setstaffrole")
-    async def set_staff_role(self,ctx,role:discord.Role):
-        if not await is_bot_admin(ctx.author,self.bot.owner_ids): return await ctx.reply("Permission denied.")
-        bot_member=ctx.guild.me
-        if role.managed or role >= bot_member.top_role:
-            return await ctx.reply("I cannot assign that role. Move my bot role above the selected staff role, then run this command again.")
-        if not bot_member.guild_permissions.manage_roles:
-            return await ctx.reply("I need the Manage Roles permission before a staff role can be configured.")
-        await db.set_setting(ctx.guild.id,"staff_role_id",role.id)
-        await ctx.reply(f"Staff application role set to {role.mention}.")
 async def setup(bot):
     await bot.add_cog(Applications(bot)); bot.add_view(ApplyPanel())
