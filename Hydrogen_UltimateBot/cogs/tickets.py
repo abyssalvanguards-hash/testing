@@ -213,51 +213,97 @@ class TicketCog(commands.Cog):
             await audit(self.bot, message.guild, "Ticket staff requested", f"Ticket #{ticket['id']}", message.author)
             return
 
-        # Any human message in an open ticket triggers the assistant. No mention
-        # or reply-to-bot is required.
+        # Debounce incoming messages per ticket. Each new message resets the
+        # short window so a burst is answered once with the combined context.
+        pending = getattr(self, "_ticket_ai_tasks", None)
+        if pending is None:
+            self._ticket_ai_tasks = {}
+            pending = self._ticket_ai_tasks
+
+        channel_id = message.channel.id
+        previous = pending.get(channel_id)
+        if previous and not previous.done():
+            previous.cancel()
+        pending[channel_id] = asyncio.create_task(
+            self._answer_ticket_burst(message, ticket)
+        )
+
+    async def _answer_ticket_burst(self, trigger_message, ticket):
+        channel = trigger_message.channel
+        guild = trigger_message.guild
+        channel_id = channel.id
         try:
+            await asyncio.sleep(1.5)
+            # Re-check state after the debounce; staff may have claimed or
+            # paused the ticket while messages were arriving.
+            current = await db.fetchone(
+                "SELECT * FROM tickets WHERE channel_id=? AND status='open'",
+                (channel_id,)
+            )
+            if not current or current.get("ai_paused") or current.get("claimed_by"):
+                return
+
+            limit = max(4, min(int(AI_MAX_TICKET_HISTORY_MESSAGES), 18))
             history = []
-            # Keep context short and fetch newest messages first to reduce
-            # Discord history overhead, then restore chronological order.
-            limit = max(4, min(int(AI_MAX_TICKET_HISTORY_MESSAGES), 12))
-            async for item in message.channel.history(limit=limit, oldest_first=False):
-                if item.content:
-                    history.append(f"{item.author.display_name}: {item.content[:600]}")
+            async for item in channel.history(limit=limit, oldest_first=False):
+                if item.content and not item.author.bot:
+                    history.append(
+                        f"{item.author.display_name}: {item.content[:600]}"
+                    )
             history.reverse()
+            if not history:
+                return
 
             prompt = (
                 "You are WardenX Manager, the support assistant in a Discord ticket. "
-                "Reply directly to the latest user message. Be concise, clear, and helpful. "
-                "Users do not need to mention or reply to you. "
-                "Never approve refunds, payments, bans, role grants, or policy exceptions. "
-                "Escalate uncertain or account-specific actions to staff.\n\n"
+                "Respond once to the combined recent user messages, not separately "
+                "to each message. Address every question that can be answered from "
+                "the conversation and configured knowledge. Be concise, clear, and "
+                "helpful. Never invent server-specific policies, prices, links, "
+                "availability, or account details. Never approve refunds, payments, "
+                "bans, role grants, or policy exceptions. Escalate uncertain or "
+                "account-specific actions to staff.\n\n"
                 + "\n".join(history)
             )
 
-            async with message.channel.typing():
+            async with channel.typing():
                 answer = await self.bot.ai.ask(
-                    prompt, message.guild.id, message.author.id, "ticket"
+                    prompt, guild.id, trigger_message.author.id, "ticket"
                 )
-            await message.reply(answer, mention_author=False)
 
-        except AIUnavailable as exc:
-            await message.channel.send(
-                f"AI unavailable — staff handoff required: `{exc}`"
+            # Avoid replying after a staff takeover during generation.
+            latest = await db.fetchone(
+                "SELECT * FROM tickets WHERE channel_id=? AND status='open'",
+                (channel_id,)
             )
-            staff = message.guild.get_role(ticket["staff_role_id"]) if ticket["staff_role_id"] else None
+            if latest and not latest.get("ai_paused") and not latest.get("claimed_by"):
+                await channel.send(answer[:1900])
+
+        except asyncio.CancelledError:
+            return
+        except AIUnavailable as exc:
+            await channel.send(
+                f"AI unavailable — staff handoff required: `{str(exc)[:300]}`"
+            )
+            staff = guild.get_role(ticket["staff_role_id"]) if ticket["staff_role_id"] else None
             if staff:
-                await message.channel.send(f"{staff.mention} please assist.")
+                await channel.send(f"{staff.mention} please assist.")
             for owner_id in self.bot.owner_ids:
                 try:
                     user = self.bot.get_user(owner_id) or await self.bot.fetch_user(owner_id)
                     await user.send(
-                        f"WardenX AI handoff in {message.guild.name} / "
-                        f"#{message.channel.name}: {exc}"
+                        f"WardenX AI handoff in {guild.name} / "
+                        f"#{channel.name}: {str(exc)[:500]}"
                     )
                 except discord.HTTPException:
                     pass
         except discord.HTTPException:
             return
+        finally:
+            task = getattr(self, "_ticket_ai_tasks", {}).get(channel_id)
+            if task is asyncio.current_task():
+                self._ticket_ai_tasks.pop(channel_id, None)
+
     async def cog_load(self):
         # Persistent views are registered in bot.setup_hook after DB init.
         pass
