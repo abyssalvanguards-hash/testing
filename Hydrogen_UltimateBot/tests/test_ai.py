@@ -58,7 +58,7 @@ def success_response(text="fallback worked"):
 
 
 def test_primary_timeout_uses_fallback_model():
-    service = GeminiService(["test-api-key"])
+    service = GeminiService(["test-api-key"], model="test-primary-model", fallback_model="test-fallback-model")
     session = FakeSession([asyncio.TimeoutError(), success_response()])
 
     with patch("core.ai.aiohttp.ClientSession", return_value=session):
@@ -66,8 +66,8 @@ def test_primary_timeout_uses_fallback_model():
 
     assert result == "fallback worked"
     assert len(session.urls) == 2
-    assert "/models/gemini-3.8-flash:" in session.urls[0]
-    assert "/models/gemini-3.5-flash-lite:" in session.urls[1]
+    assert "/models/test-primary-model:" in session.urls[0]
+    assert "/models/test-fallback-model:" in session.urls[1]
 
 
 def test_primary_503_retries_then_uses_fallback():
@@ -90,13 +90,13 @@ def test_primary_503_retries_then_uses_fallback():
 
 
 def test_timeout_without_fallback_returns_actionable_error():
-    service = GeminiService(["test-api-key"], fallback_model=None)
+    service = GeminiService(["test-api-key"], model="test-primary-model", fallback_model=None)
     session = FakeSession([asyncio.TimeoutError()])
 
     with patch("core.ai.aiohttp.ClientSession", return_value=session):
         try:
             asyncio.run(service.ask("test prompt"))
         except AIUnavailable as exc:
-            assert "timed out for model gemini-3.8-flash" in str(exc)
+            assert "timed out for model test-primary-model" in str(exc)
         else:
             raise AssertionError("Expected AIUnavailable")
