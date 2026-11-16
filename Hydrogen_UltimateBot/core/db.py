@@ -95,6 +95,15 @@ async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
         await db.executescript(SCHEMA)
         await db.execute("UPDATE guild_settings SET prefix=? WHERE prefix=?", ("$", "!"))
+        guild_cols = {row[1] for row in await (await db.execute("PRAGMA table_info(guild_settings)")).fetchall()}
+        for column, definition in {
+            "welcome_dm_enabled": "INTEGER DEFAULT 1",
+            "welcome_rules_url": "TEXT",
+            "welcome_store_url": "TEXT",
+            "welcome_support_url": "TEXT"
+        }.items():
+            if column not in guild_cols:
+                await db.execute(f"ALTER TABLE guild_settings ADD COLUMN {column} {definition}")
         cols = {row[1] for row in await (await db.execute("PRAGMA table_info(invoices)")).fetchall()}
         if "txid" not in cols:
             await db.execute("ALTER TABLE invoices ADD COLUMN txid TEXT")
