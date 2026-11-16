@@ -12,10 +12,10 @@ from cogs.server_builder import (
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_exact_server_template_has_six_categories_and_25_channels():
+def test_exact_server_template_has_seven_categories_and_29_channels():
     template = json.loads((ROOT / "data" / "server_template.json").read_text(encoding="utf-8"))
-    assert len(template["categories"]) == 6
-    assert sum(len(item["channels"]) for item in template["categories"]) == 25
+    assert len(template["categories"]) == 7
+    assert sum(len(item["channels"]) for item in template["categories"]) == 29
 
 
 def test_requested_role_names_are_in_template():
@@ -46,7 +46,6 @@ def test_channel_access_config_is_per_guild_and_uses_placeholders_only():
     assert "YOUR_TEST_GUILD_ID" in config["guilds"]
     item = config["guilds"]["YOUR_TEST_GUILD_ID"]
     assert set(item) == {"verified_role_id", "verification_channel_id", "protected_channel_ids"}
-
 
 
 def test_classification_roles_cover_wardenx_bots_and_humans():
