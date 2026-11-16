@@ -43,8 +43,8 @@ class HydrogenBot(commands.Bot):
         self.owner_ids = [int(x) for x in OWNER_IDS]
         self._synced_guilds = set()
         ai_config = BOT_CONFIG.get("ai", {})
-        model = ai_config.get("model") or (getattr(private, "GEMINI_MODEL", "gemini-3.8-flash") if private else "gemini-3.8-flash")
-        fallback_model = ai_config.get("fallback_model") or (getattr(private, "GEMINI_FALLBACK_MODEL", "gemini-3.5-flash-lite") if private else "gemini-3.5-flash-lite")
+        model = ai_config.get("model") or (getattr(private, "GEMINI_MODEL", None) if private else None)
+        fallback_model = ai_config.get("fallback_model") or (getattr(private, "GEMINI_FALLBACK_MODEL", None) if private else None)
         self.api_key_moderator_ids = set(API_KEY_MODERATOR_IDS)
         self.ai = GeminiService(AI_KEYS, model, fallback_model)
 
