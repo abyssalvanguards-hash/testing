@@ -63,6 +63,10 @@ CREATE TABLE IF NOT EXISTS invoices (
  reference TEXT, status TEXT DEFAULT 'pending', created_at TEXT NOT NULL,
  txid TEXT, confirmations INTEGER DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS log_channel_routes (
+ guild_id INTEGER NOT NULL, event_type TEXT NOT NULL, channel_id INTEGER NOT NULL,
+ PRIMARY KEY(guild_id,event_type)
+);
 CREATE TABLE IF NOT EXISTS audit_events (
  id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id INTEGER,
  actor_id INTEGER, event TEXT NOT NULL, details TEXT,
