@@ -23,23 +23,65 @@ def _event_type(event):
     return "audit"
 
 async def ensure_log_channels(guild, actor=None):
-    category = discord.utils.get(guild.categories, name="Hydrogen Logs")
-    if category is None:
-        category = await guild.create_category("Hydrogen Logs", reason=f"WardenX log setup requested by {actor or 'server builder'}")
+    """Create/reuse private, screenshot-style log categories and persist each route."""
     me = guild.me
+    staff_names = {
+        "Founder", "Owner", "Manager", "Admin", "Senior Manager",
+        "Senior Moderator", "Moderator", "Senior Staff", "Staff", "Trial Staff",
+    }
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(view_channel=False),
-        me: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, embed_links=True, attach_files=True),
+        me: discord.PermissionOverwrite(
+            view_channel=True, send_messages=True, read_message_history=True,
+            embed_links=True, attach_files=True
+        ),
+    }
+    for role in guild.roles:
+        if role.name in {("W X・" + name) for name in staff_names}:
+            overwrites[role] = discord.PermissionOverwrite(
+                view_channel=True, read_message_history=True
+            )
+
+    categories = {
+        "audit": ".Logs",
+        "members": ".Logs",
+        "messages": ".Logs",
+        "security": ".Logs",
+        "moderation": ".Mod Logs",
     }
     result = {}
+    category_cache = {}
     for event_type, name in LOG_CHANNELS.items():
+        category_name = categories[event_type]
+        category = category_cache.get(category_name)
+        if category is None:
+            category = discord.utils.get(guild.categories, name=category_name)
+            if category is None:
+                category = await guild.create_category(
+                    category_name, overwrites=overwrites,
+                    reason=f"WardenX log setup requested by {actor or 'server builder'}"
+                )
+            else:
+                await category.edit(
+                    overwrites=overwrites,
+                    reason="Apply WardenX private log-category permissions"
+                )
+            category_cache[category_name] = category
+
         channel = discord.utils.get(category.text_channels, name=name)
         if channel is None:
-            channel = await guild.create_text_channel(name, category=category, overwrites=overwrites, reason=f"WardenX {event_type} log channel")
+            channel = await guild.create_text_channel(
+                name, category=category, overwrites=overwrites,
+                reason=f"WardenX {event_type} log channel"
+            )
         else:
-            await channel.set_permissions(me, view_channel=True, send_messages=True, read_message_history=True, reason="Ensure WardenX can write logs")
+            await channel.edit(
+                category=category, sync_permissions=True,
+                reason="Place WardenX log channel in its dedicated category"
+            )
         await db.execute(
-            "INSERT INTO log_channel_routes(guild_id,event_type,channel_id) VALUES(?,?,?) ON CONFLICT(guild_id,event_type) DO UPDATE SET channel_id=excluded.channel_id",
+            "INSERT INTO log_channel_routes(guild_id,event_type,channel_id) VALUES(?,?,?) "
+            "ON CONFLICT(guild_id,event_type) DO UPDATE SET channel_id=excluded.channel_id",
             (guild.id, event_type, channel.id)
         )
         result[event_type] = channel
