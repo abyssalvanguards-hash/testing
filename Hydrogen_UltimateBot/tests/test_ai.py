@@ -121,6 +121,7 @@ def test_key_usage_is_persisted_without_secret(tmp_path):
 def test_key_usage_tracks_selected_slot(tmp_path):
     service = GeminiService(["first-secret", "second-secret"], model="test-primary-model")
     service.key_usage_file = tmp_path / "gemini_key_usage.json"
+    service.key_usage = {}
     service.switch_key(2)
     session = FakeSession([success_response("second slot used")])
 
