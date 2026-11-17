@@ -248,10 +248,6 @@
         {
           "name": "📨・report",
           "type": "text"
-        },
-        {
-          "name": "🕊️・staff-apply",
-          "type": "text"
         }
       ]
     },
@@ -336,35 +332,6 @@
       ]
     },
     {
-      "name": "🎫・TICKETS",
-      "channels": [
-        {
-          "name": "🎫・buyer-tickets",
-          "type": "text"
-        },
-        {
-          "name": "🛒・purchase-tickets",
-          "type": "text"
-        },
-        {
-          "name": "🛒・purchase-tickets-2",
-          "type": "text"
-        },
-        {
-          "name": "🎟️・slot-tickets",
-          "type": "text"
-        },
-        {
-          "name": "🚩・report-tickets",
-          "type": "text"
-        },
-        {
-          "name": "🛟・support-tickets",
-          "type": "text"
-        }
-      ]
-    },
-    {
       "name": "🔒・STAFF AREA",
       "staff_only": true,
       "channels": [
@@ -389,8 +356,61 @@
       ]
     },
     {
-      "name": "📋・STAFF APPLY",
-      "staff_only": true,
+      "name": ".Buyer Tickets",
+      "channels": [
+        {
+          "name": "🎫・buyer-tickets",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": ".Purchase Tickets",
+      "channels": [
+        {
+          "name": "🛒・purchase-tickets",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": ".Purchase Tickets 2",
+      "channels": [
+        {
+          "name": "🛒・purchase-tickets-2",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": ".Slot Tickets",
+      "channels": [
+        {
+          "name": "🎟️・slot-tickets",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": ".Report Tickets",
+      "channels": [
+        {
+          "name": "🚩・report-tickets",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": ".Support Tickets",
+      "channels": [
+        {
+          "name": "🛟・support-tickets",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": ".Staff Apply",
       "channels": [
         {
           "name": "📋・staff-applications",
