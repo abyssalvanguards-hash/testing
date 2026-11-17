@@ -47,6 +47,27 @@ class HydrogenBot(commands.Bot):
         fallback_model = ai_config.get("fallback_model") or (getattr(private, "GEMINI_FALLBACK_MODEL", None) if private else None)
         self.api_key_moderator_ids = set(API_KEY_MODERATOR_IDS)
         self.ai = GeminiService(AI_KEYS, model, fallback_model)
+        self.ai.owner_notifier = self.notify_ai_owner
+
+    async def notify_ai_owner(self, event, key_number, detail):
+        labels = {
+            "invalid_key": "API key rejected",
+            "authorization_failure": "API authorization failed",
+            "quota_or_rate_limit": "Project quota or rate limit reached"
+        }
+        message = (
+            f"WardenX Gemini alert: {labels.get(event, 'Key health event')}\\n"
+            f"Key slot: #{key_number} (secret hidden)\\n"
+            f"Details: {detail}\\n"
+            "Check Google AI Studio/Cloud quota and key restrictions. "
+            "A new key in the same Google project may share the same project quota."
+        )
+        for owner_id in self.owner_ids:
+            try:
+                user = self.get_user(owner_id) or await self.fetch_user(owner_id)
+                await user.send(message)
+            except Exception:
+                logging.warning("Could not DM configured owner ID %s about Gemini status.", owner_id)
 
     async def prefix_resolver(self, bot, message):
         if not message.guild:
