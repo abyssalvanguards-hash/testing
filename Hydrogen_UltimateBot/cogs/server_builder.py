@@ -29,6 +29,10 @@ SMALL_CAPS = str.maketrans({
 
 
 def channel_name(value):
+    value = value.strip()
+    # Screenshot-style names already include their own emoji separator.
+    if "・" in value:
+        return value.lower().replace(" ", "-")[:100]
     return ("▫-" + value.lower().translate(SMALL_CAPS).replace(" ", "-"))[:100]
 
 
@@ -37,7 +41,11 @@ def role_name(value):
 
 
 def category_name(value):
-    return ("━━━「 " + value.upper().strip() + " 」━━━")[:100]
+    value = value.strip()
+    # Keep compact dot/emoji category labels from the supplied server reference.
+    if value.startswith(".") or "・" in value:
+        return value[:100]
+    return ("━━━「 " + value.upper() + " 」━━━")[:100]
 
 
 def snowflake(value):
