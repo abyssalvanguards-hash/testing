@@ -154,6 +154,249 @@
           "type": "voice"
         }
       ]
+    },
+    {
+      "name": "📌・IMPORTANT",
+      "channels": [
+        {
+          "name": "📢・notice",
+          "type": "text"
+        },
+        {
+          "name": "📅・events",
+          "type": "text"
+        },
+        {
+          "name": "📝・backup",
+          "type": "text"
+        },
+        {
+          "name": "🛠️・helpful-cmds",
+          "type": "text"
+        },
+        {
+          "name": "🎉・giveaway",
+          "type": "text"
+        },
+        {
+          "name": "🔊・azuraslots",
+          "type": "voice"
+        }
+      ]
+    },
+    {
+      "name": ".slot",
+      "channels": [
+        {
+          "name": "📦・get-your-slot",
+          "type": "text"
+        },
+        {
+          "name": "📜・rules",
+          "type": "text"
+        },
+        {
+          "name": "🛟・recovery",
+          "type": "text"
+        },
+        {
+          "name": "📊・emi-options",
+          "type": "text"
+        },
+        {
+          "name": "⏰・slot-ping-reset",
+          "type": "text"
+        },
+        {
+          "name": "⭐・feedbacks",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": ".Chat",
+      "channels": [
+        {
+          "name": "🍲・chat",
+          "type": "text"
+        },
+        {
+          "name": "🍲・vouch",
+          "type": "text"
+        },
+        {
+          "name": "🔊・hangout",
+          "type": "voice"
+        }
+      ]
+    },
+    {
+      "name": ".Services",
+      "channels": [
+        {
+          "name": "🧡・support",
+          "type": "text"
+        },
+        {
+          "name": "💸・role",
+          "type": "text"
+        },
+        {
+          "name": "🌷・purchase",
+          "type": "text"
+        },
+        {
+          "name": "📨・report",
+          "type": "text"
+        },
+        {
+          "name": "🕊️・staff-apply",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": ".outlet",
+      "channels": [
+        {
+          "name": "🌸・listings",
+          "type": "text"
+        },
+        {
+          "name": "🌼・patron",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": "👑・PREMIUM SLOTS",
+      "channels": [
+        {
+          "name": "👑・crunchyroll",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": "📦・PAID SLOTS",
+      "channels": [
+        {
+          "name": "📦・cozy-mart",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": "🎁・FREE SLOTS",
+      "channels": [
+        {
+          "name": "🎁・nick",
+          "type": "text"
+        },
+        {
+          "name": "🎁・cozy-mart",
+          "type": "text"
+        },
+        {
+          "name": "🎁・nexbyte-store",
+          "type": "text"
+        },
+        {
+          "name": "🎁・shakira",
+          "type": "text"
+        },
+        {
+          "name": "🎁・pj-mart",
+          "type": "text"
+        },
+        {
+          "name": "🎁・303",
+          "type": "text"
+        },
+        {
+          "name": "🎁・nitish",
+          "type": "text"
+        },
+        {
+          "name": "🎁・lowshop",
+          "type": "text"
+        },
+        {
+          "name": "🎁・livy",
+          "type": "text"
+        },
+        {
+          "name": "🎁・darks-omega",
+          "type": "text"
+        },
+        {
+          "name": "🎁・worth-of-price",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": "🎫・TICKETS",
+      "channels": [
+        {
+          "name": "🎫・buyer-tickets",
+          "type": "text"
+        },
+        {
+          "name": "🛒・purchase-tickets",
+          "type": "text"
+        },
+        {
+          "name": "🛒・purchase-tickets-2",
+          "type": "text"
+        },
+        {
+          "name": "🎟️・slot-tickets",
+          "type": "text"
+        },
+        {
+          "name": "🚩・report-tickets",
+          "type": "text"
+        },
+        {
+          "name": "🛟・support-tickets",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": "🔒・STAFF AREA",
+      "staff_only": true,
+      "channels": [
+        {
+          "name": "🔒・staff-chat",
+          "type": "text"
+        },
+        {
+          "name": "📣・staff-announcements",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": "📜・TRANSCRIPTS",
+      "staff_only": true,
+      "channels": [
+        {
+          "name": "📜・transcripts",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": "📋・STAFF APPLY",
+      "staff_only": true,
+      "channels": [
+        {
+          "name": "📋・staff-applications",
+          "type": "text"
+        }
+      ]
     }
   ],
   "roles": [
