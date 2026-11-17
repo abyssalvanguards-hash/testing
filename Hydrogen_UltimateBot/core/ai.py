@@ -22,7 +22,16 @@ class GeminiService:
         self.keys = [str(k).strip() for k in (keys or []) if k and "PASTE_" not in str(k)]
         self.model = (model or "").strip() or None
         self.fallback_model = (fallback_model or "").strip() or None
-        self.selection_file = Path(__file__).resolve().parents[1] / "data" / "gemini_selection.json"
+        data_dir = Path(__file__).resolve().parents[1] / "data"
+        self.selection_file = data_dir / "gemini_selection.json"
+        self.key_usage_file = data_dir / "gemini_key_usage.json"
+        self.key_usage = {}
+        try:
+            usage = json.loads(self.key_usage_file.read_text(encoding="utf-8"))
+            if isinstance(usage, dict) and isinstance(usage.get("keys"), dict):
+                self.key_usage = usage["keys"]
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            pass
         self.active_key_index = 0
         try:
             saved = json.loads(self.selection_file.read_text(encoding="utf-8"))
@@ -53,6 +62,24 @@ class GeminiService:
         )
         return self.active_key_index + 1
 
+    def last_used_at(self, key_number):
+        """Return the UTC ISO timestamp of the last attempt for a 1-based key slot."""
+        return self.key_usage.get(str(int(key_number)))
+
+    def _record_key_use(self, key_index):
+        """Persist key-slot usage metadata without storing or deriving the API secret."""
+        timestamp = datetime.now(timezone.utc).isoformat()
+        self.key_usage[str(key_index + 1)] = timestamp
+        try:
+            self.key_usage_file.parent.mkdir(parents=True, exist_ok=True)
+            self.key_usage_file.write_text(
+                json.dumps({"keys": self.key_usage}, indent=2),
+                encoding="utf-8"
+            )
+        except OSError:
+            logging.exception("Could not persist Gemini key usage metadata.")
+        return timestamp
+
     async def _check_budget(self, guild_id, purpose):
         today = datetime.now(timezone.utc).date().isoformat()
         row = await db.fetchone(
@@ -79,6 +106,8 @@ class GeminiService:
         models = [self.model]
         if self.fallback_model and self.fallback_model != self.model:
             models.append(self.fallback_model)
+
+        self._record_key_use(self.active_key_index)
 
         try:
             async with self._semaphore:
