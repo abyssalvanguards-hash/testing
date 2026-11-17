@@ -132,3 +132,32 @@ def test_key_usage_tracks_selected_slot(tmp_path):
     assert "1" not in saved["keys"]
     assert "2" in saved["keys"]
     assert "second-secret" not in service.key_usage_file.read_text(encoding="utf-8")
+
+
+def test_invalid_key_notifies_owner_once_without_secret():
+    service = GeminiService(["secret-test-key"], model="test-primary-model")
+    events = []
+
+    async def notify(event, key_number, detail):
+        events.append((event, key_number, detail))
+
+    service.owner_notifier = notify
+    rejected = FakeResponse(401, {"error": {"message": "key rejected"}})
+    session = FakeSession([rejected, rejected])
+
+    async def run_twice():
+        with patch("core.ai.aiohttp.ClientSession", return_value=session):
+            for _ in range(2):
+                try:
+                    await service.ask("test prompt")
+                except AIUnavailable:
+                    pass
+                else:
+                    raise AssertionError("Expected AIUnavailable")
+
+    asyncio.run(run_twice())
+
+    assert len(events) == 1
+    assert events[0][0] == "authorization_failure"
+    assert events[0][1] == 1
+    assert "secret-test-key" not in str(events)
