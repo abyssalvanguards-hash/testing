@@ -1,0 +1,35 @@
+{
+  "owners": {
+    "user_ids": []
+  },
+  "permissions": {
+    "api_key_moderator_user_ids": []
+  },
+  "roles": {
+    "free_gen_role_id": null,
+    "premium_gen_role_id": null,
+    "booster_gen_role_id": null
+  },
+  "ai": {
+    "provider": "google_gemini",
+    "model": "",
+    "fallback_model": "",
+    "key_selection": "manual",
+    "notify_owner_on_key_auth_failure": true,
+    "notify_owner_on_quota_exhaustion": true
+  },
+  "links": {
+    "rules": "",
+    "store": "",
+    "support": "",
+    "verification": ""
+  },
+  "database": {
+    "knowledge_base": "data/knowledge_base.json",
+    "slot_database": "data/azura_slots.db"
+  },
+  "logging": {
+    "ai_key_events": true,
+    "ai_usage": true
+  }
+}

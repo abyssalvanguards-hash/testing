@@ -6,7 +6,11 @@ DISCORD_TOKEN = "PASTE_DISCORD_BOT_TOKEN_HERE"
 
 # Use one Gemini project/key initially. Add another key only for legitimate
 # independent projects/accounts; quota errors do NOT trigger key rotation.
-GEMINI_MODEL = "gemini-3.8-flash"
+# Fill these only after selecting model IDs supported by your Gemini API project.
+# Leave blank until the model choice is confirmed.
+GEMINI_MODEL = ""
+# Optional fallback model; must also be supported by your Gemini API project.
+GEMINI_FALLBACK_MODEL = ""
 
 GEMINI_API_KEYS = [
     "PASTE_GEMINI_API_KEY_HERE",

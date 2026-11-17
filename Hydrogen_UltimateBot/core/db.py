@@ -35,12 +35,6 @@ CREATE TABLE IF NOT EXISTS applications (
  ai_summary TEXT, ai_recommendation TEXT, status TEXT DEFAULT 'pending',
  reviewer_id INTEGER, created_at TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS slots (
- id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id INTEGER NOT NULL,
- channel_id INTEGER UNIQUE NOT NULL, owner_id INTEGER NOT NULL,
- ping_limit INTEGER DEFAULT 5, ping_count INTEGER DEFAULT 0,
- reset_at TEXT NOT NULL, active INTEGER DEFAULT 1
-);
 CREATE TABLE IF NOT EXISTS xp (
  guild_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
  xp INTEGER DEFAULT 0, level INTEGER DEFAULT 0,
@@ -50,11 +44,22 @@ CREATE TABLE IF NOT EXISTS invite_counts (
  guild_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
  joins INTEGER DEFAULT 0, PRIMARY KEY(guild_id,user_id)
 );
+CREATE TABLE IF NOT EXISTS invite_rewards (
+ guild_id INTEGER NOT NULL,
+ invite_threshold INTEGER NOT NULL,
+ role_id INTEGER NOT NULL,
+ dm_message TEXT,
+ PRIMARY KEY(guild_id, invite_threshold)
+);
 CREATE TABLE IF NOT EXISTS invoices (
  id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id INTEGER NOT NULL,
  user_id INTEGER NOT NULL, method TEXT NOT NULL, amount REAL NOT NULL,
  reference TEXT, status TEXT DEFAULT 'pending', created_at TEXT NOT NULL,
  txid TEXT, confirmations INTEGER DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS log_channel_routes (
+ guild_id INTEGER NOT NULL, event_type TEXT NOT NULL, channel_id INTEGER NOT NULL,
+ PRIMARY KEY(guild_id,event_type)
 );
 CREATE TABLE IF NOT EXISTS audit_events (
  id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id INTEGER,
@@ -68,6 +73,15 @@ CREATE TABLE IF NOT EXISTS server_change_plans (
 CREATE TABLE IF NOT EXISTS used_payment_txids (
  txid TEXT PRIMARY KEY, invoice_id INTEGER NOT NULL, guild_id INTEGER NOT NULL, used_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS busy_states (
+ guild_id INTEGER PRIMARY KEY, owner_id INTEGER NOT NULL,
+ expires_at TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS server_backups (
+ id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id INTEGER NOT NULL,
+ created_by INTEGER NOT NULL, file_path TEXT NOT NULL,
+ created_at TEXT NOT NULL, description TEXT
+);
 CREATE TABLE IF NOT EXISTS ai_usage (
  id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id INTEGER,
  user_id INTEGER, purpose TEXT, created_at TEXT NOT NULL
@@ -76,16 +90,44 @@ CREATE TABLE IF NOT EXISTS ai_usage (
 
 async def init_db():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Preserve a one-time backup before removing the retired WardenX slot table.
+    # Azura's replacement slot system uses its own independent database.
+    backup_path = DB_PATH.with_name("hydrogen_pre_azura_slot_cleanup.sqlite3.bak")
+    if DB_PATH.exists() and not backup_path.exists():
+        async with aiosqlite.connect(DB_PATH) as source:
+            cursor = await source.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='slots'"
+            )
+            has_legacy_slots = await cursor.fetchone()
+            await cursor.close()
+            if has_legacy_slots:
+                async with aiosqlite.connect(backup_path) as backup:
+                    await source.backup(backup)
+
     async with aiosqlite.connect(DB_PATH) as db:
+        # Remove only the retired WardenX slot table; no other tables are touched.
+        await db.execute("DROP TABLE IF EXISTS slots")
         await db.executescript(SCHEMA)
-        # Upgrade old built-in prefix values without overriding custom prefixes.
         await db.execute("UPDATE guild_settings SET prefix=? WHERE prefix=?", ("$", "!"))
-        # Safe additive migrations for existing databases.
+        guild_cols = {row[1] for row in await (await db.execute("PRAGMA table_info(guild_settings)")).fetchall()}
+        for column, definition in {
+            "welcome_dm_enabled": "INTEGER DEFAULT 1",
+            "welcome_rules_url": "TEXT",
+            "welcome_store_url": "TEXT",
+            "welcome_support_url": "TEXT"
+        }.items():
+            if column not in guild_cols:
+                await db.execute(f"ALTER TABLE guild_settings ADD COLUMN {column} {definition}")
         cols = {row[1] for row in await (await db.execute("PRAGMA table_info(invoices)")).fetchall()}
         if "txid" not in cols:
             await db.execute("ALTER TABLE invoices ADD COLUMN txid TEXT")
         if "confirmations" not in cols:
             await db.execute("ALTER TABLE invoices ADD COLUMN confirmations INTEGER DEFAULT 0")
+        # Ticket AI handoff is additive for existing databases.
+        ticket_cols = {row[1] for row in await (await db.execute("PRAGMA table_info(tickets)")).fetchall()}
+        if "ai_paused" not in ticket_cols:
+            await db.execute("ALTER TABLE tickets ADD COLUMN ai_paused INTEGER DEFAULT 0")
         await db.commit()
 
 async def execute(query, params=()):
@@ -111,6 +153,15 @@ async def ensure_guild(guild_id):
     await execute("INSERT OR IGNORE INTO guild_settings(guild_id) VALUES(?)", (guild_id,))
 
 async def get_setting(guild_id, key, default=None):
+    allowed = {
+        "prefix", "log_channel_id", "review_channel_id", "staff_role_id",
+        "admin_role_id", "mod_role_id", "welcome_channel_id", "goodbye_channel_id",
+        "ticket_transcript_channel_id", "excluded_category_id", "upi_id", "upi_payee",
+        "ltc_address", "btc_address", "channel_template", "welcome_dm_enabled",
+        "welcome_rules_url", "welcome_store_url", "welcome_support_url"
+    }
+    if key not in allowed:
+        raise ValueError("Unsupported setting")
     await ensure_guild(guild_id)
     row = await fetchone(f"SELECT {key} AS value FROM guild_settings WHERE guild_id=?", (guild_id,))
     return row["value"] if row and row["value"] is not None else default

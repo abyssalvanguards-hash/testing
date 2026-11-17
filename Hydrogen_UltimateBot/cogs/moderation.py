@@ -47,7 +47,7 @@ class Moderation(commands.Cog):
         if len(q)>=7 or (repeated and len(q)>=4):
             if message.author.guild_permissions.manage_messages: return
             try:
-                await message.author.timeout(timedelta(seconds=60),reason="Hydrogen AutoMod: spam threshold")
+                await message.author.timeout(timedelta(seconds=60),reason="WardenX Manager AutoMod: spam threshold")
                 await message.channel.send(f"{message.author.mention} was timed out for spam. If this is a mistake, contact staff.",delete_after=8)
                 await audit(self.bot,message.guild,"AutoMod timeout",f"Spam threshold triggered in {message.channel.mention}",message.author)
                 q.clear()

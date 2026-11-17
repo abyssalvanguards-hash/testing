@@ -1,6 +1,6 @@
-# Hydrogen UltimateBot
+# WardenX Manager
 
-**Made by Hydrogen** — modular Discord server management bot.
+**Developer: @h_two_** — modular Discord server management bot.
 
 This is a modular, configurable project. It is not a selfbot and must be run with a Discord **bot token** created in the Discord Developer Portal. Never paste a user account token.
 
@@ -59,6 +59,19 @@ This is a modular, configurable project. It is not a selfbot and must be run wit
 7. Do not share `private_config.py` with anyone.
 
 The bot uses Gemini only when a key is configured. AI daily request cap is optional (`AI_DAILY_REQUEST_LIMIT = None` means no local cap). The bot does **not** rotate keys to evade provider quotas. If Gemini returns a quota/rate-limit error, the AI function stops and ticket support is handed to staff. You can configure a legitimate alternate provider/project later, but do not use key rotation to bypass service limits.
+
+## 4.1 Gemini key administration
+
+The owner and configured API-key moderators can use these hybrid slash/prefix commands:
+
+- `/gemini status` — show the selected model and active key slot number.
+- `/gemini keys` — list configured key slots and their last-attempt time in UTC.
+- `/gemini switch <number>` — select a configured key slot; the selection persists across restarts.
+- `/gemini test` — send a small connection test using the selected slot.
+
+The bot never displays API key values. Last-used metadata stores only slot numbers and timestamps in local files under `data/`; those runtime files are excluded from Git.
+
+A quota/rate-limit response is not treated as an invalid key and does not trigger key rotation. Multiple keys from one Google project do not multiply that project's quota. Configure `GEMINI_MODEL` and the optional `GEMINI_FALLBACK_MODEL` only with model IDs confirmed for your API project.
 
 ## 5. Discord Developer Portal
 
@@ -216,7 +229,32 @@ For AI restructuring, the bot needs Manage Channels. For permission plans, it ne
 
 
 ## Slash and prefix commands
-All text commands are registered as hybrid commands: use either `/command` or your configured prefix (default `!`). Use `/help` or `!help` for the command list. Invite the bot with both `bot` and `applications.commands` OAuth2 scopes. Slash commands are synced per guild at startup for faster availability.
+All text commands are registered as hybrid commands: use either `/command` or your configured prefix (default `!`). Use `/help` or `!help` for the complete command list, including grouped subcommands and server-care tools. Invite the bot with both `bot` and `applications.commands` OAuth2 scopes. Slash commands are synced per guild at startup for faster availability.
 
 ## Gemini API troubleshooting
 The Gemini integration uses the configured `GEMINI_MODEL` (default `gemini-3.8-flash`) and now reports the provider HTTP status and safe error detail. Check the key, Gemini API enablement, project restrictions, model name, and quota based on the returned status. Multiple configured keys are not rotated to evade quotas; the first configured key is used.
+
+
+## Optional web panel (in development)
+
+The web panel is a separate, optional service under `web_panel/`. It is not needed for normal bot operation.
+
+- The bot remains on your existing Python host; the panel can be deployed later on a web host.
+- The panel is designed for outbound bot polling, so the bot host does not need a public web port.
+- Leave `PANEL_ENABLED=false` (the default) until the bot connector is installed and the panel is deployed.
+- Panel deployment variables are documented in `web_panel/.env.example`.
+- The panel provides Discord OAuth2 sign-in for server owners, a request queue/history view, and an optional outbound bot connector. Supported requests are server status, busy-mode status, backup listing, and Gemini-generated restructuring/permission plans. Plans are previews only: review them with `/showplan <id>` and apply them in Discord with `/applyplan <id> CONFIRM` as the actual server owner. The panel does not directly apply server changes.
+- Use HTTPS and unique random values for `PANEL_SHARED_SECRET` and `PANEL_SESSION_SECRET`. Never reuse your Discord bot token or Gemini API key.
+
+The panel is intentionally separate so a panel outage cannot prevent the Discord bot from starting or handling Discord events.
+
+
+## Server care and backups
+
+- `/busy 2d` enables an owner-controlled server-care status for up to 30 days. Use `/busystatus` to check it and `/busyoff` to end it early. The status expires automatically. Existing configured moderation, welcome, and logging features continue; busy mode does not grant Gemini new authority.
+- `/backup create` saves a JSON snapshot of server roles, channels, and role permission overwrites under `data/backups/<guild_id>/`.
+- `/backup list` lists recent backups.\n- `/backup export <id>` sends the selected JSON backup file; only the actual server owner can export it.
+- `/backup restore <id>` previews missing structure. Only the actual server owner can run `/backup restore <id> CONFIRM`. Restore creates missing roles/categories/channels only; it does not edit or delete existing items. New roles are recreated below the bot's top role; original role positions are not restored. Restore requires the bot to have Manage Roles and Manage Channels and may stop partway if Discord rejects an operation.
+- Backups exclude message history, member lists, and member-role assignments. Restore may stop partway if Discord permissions or role hierarchy prevent an operation.
+
+The panel connector supports server status, busy-mode status, backup listing, and preview-plan creation for restructuring and permission reviews. All actual server mutations remain gated by the actual server owner's Discord confirmation.

@@ -5,3 +5,6 @@ __pycache__/
 data/*.db
 logs/*
 !logs/.gitkeep
+
+data/gemini_selection.json
+data/gemini_key_usage.json

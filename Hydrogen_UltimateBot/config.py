@@ -1,8 +1,8 @@
 from pathlib import Path
 
-PROJECT_NAME = "Hydrogen UltimateBot"
-DEVELOPER_NAME = "Hydrogen"
-BRAND_FOOTER = "Hydrogen UltimateBot • Made by Hydrogen"
+PROJECT_NAME = "WardenX Manager"
+DEVELOPER_NAME = "@h_two_"
+BRAND_FOOTER = "WardenX Manager • Developer: @h_two_"
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
