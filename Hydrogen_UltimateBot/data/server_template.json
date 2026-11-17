@@ -266,70 +266,18 @@
     },
     {
       "name": "👑・PREMIUM SLOTS",
-      "channels": [
-        {
-          "name": "👑・crunchyroll",
-          "type": "text"
-        }
-      ]
+      "channels": [],
+      "description": "Premium slot channels are created automatically when a premium slot is approved."
     },
     {
       "name": "📦・PAID SLOTS",
-      "channels": [
-        {
-          "name": "📦・cozy-mart",
-          "type": "text"
-        }
-      ]
+      "channels": [],
+      "description": "Paid slot channels are created automatically when a paid slot is approved."
     },
     {
       "name": "🎁・FREE SLOTS",
-      "channels": [
-        {
-          "name": "🎁・nick",
-          "type": "text"
-        },
-        {
-          "name": "🎁・cozy-mart",
-          "type": "text"
-        },
-        {
-          "name": "🎁・nexbyte-store",
-          "type": "text"
-        },
-        {
-          "name": "🎁・shakira",
-          "type": "text"
-        },
-        {
-          "name": "🎁・pj-mart",
-          "type": "text"
-        },
-        {
-          "name": "🎁・303",
-          "type": "text"
-        },
-        {
-          "name": "🎁・nitish",
-          "type": "text"
-        },
-        {
-          "name": "🎁・lowshop",
-          "type": "text"
-        },
-        {
-          "name": "🎁・livy",
-          "type": "text"
-        },
-        {
-          "name": "🎁・darks-omega",
-          "type": "text"
-        },
-        {
-          "name": "🎁・worth-of-price",
-          "type": "text"
-        }
-      ]
+      "channels": [],
+      "description": "Free slot channels are created automatically when a free slot is claimed."
     },
     {
       "name": "🔒・STAFF AREA",
