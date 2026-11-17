@@ -61,7 +61,12 @@ class GeminiAdmin(commands.Cog):
         lines = []
         for index in range(len(ai.keys)):
             marker = " ← active" if index == ai.active_key_index else ""
-            lines.append(f"`{index + 1}` • Configured{marker}")
+            last_used = ai.last_used_at(index + 1)
+            if last_used:
+                last_used = last_used.replace("T", " ")[:19] + " UTC"
+            else:
+                last_used = "Never"
+            lines.append(f"`{index + 1}` • Configured{marker} • Last used: `{last_used}`")
         await ctx.reply(
             "**Configured Gemini key slots**\n" + "\n".join(lines),
             ephemeral=True
