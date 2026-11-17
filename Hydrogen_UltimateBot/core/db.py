@@ -35,12 +35,6 @@ CREATE TABLE IF NOT EXISTS applications (
  ai_summary TEXT, ai_recommendation TEXT, status TEXT DEFAULT 'pending',
  reviewer_id INTEGER, created_at TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS slots (
- id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id INTEGER NOT NULL,
- channel_id INTEGER UNIQUE NOT NULL, owner_id INTEGER NOT NULL,
- ping_limit INTEGER DEFAULT 5, ping_count INTEGER DEFAULT 0,
- reset_at TEXT NOT NULL, active INTEGER DEFAULT 1
-);
 CREATE TABLE IF NOT EXISTS xp (
  guild_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
  xp INTEGER DEFAULT 0, level INTEGER DEFAULT 0,
@@ -96,7 +90,24 @@ CREATE TABLE IF NOT EXISTS ai_usage (
 
 async def init_db():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Preserve a one-time backup before removing the retired WardenX slot table.
+    # Azura's replacement slot system uses its own independent database.
+    backup_path = DB_PATH.with_name("hydrogen_pre_azura_slot_cleanup.sqlite3.bak")
+    if DB_PATH.exists() and not backup_path.exists():
+        async with aiosqlite.connect(DB_PATH) as source:
+            cursor = await source.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='slots'"
+            )
+            has_legacy_slots = await cursor.fetchone()
+            await cursor.close()
+            if has_legacy_slots:
+                async with aiosqlite.connect(backup_path) as backup:
+                    await source.backup(backup)
+
     async with aiosqlite.connect(DB_PATH) as db:
+        # Remove only the retired WardenX slot table; no other tables are touched.
+        await db.execute("DROP TABLE IF EXISTS slots")
         await db.executescript(SCHEMA)
         await db.execute("UPDATE guild_settings SET prefix=? WHERE prefix=?", ("$", "!"))
         guild_cols = {row[1] for row in await (await db.execute("PRAGMA table_info(guild_settings)")).fetchall()}
@@ -117,15 +128,6 @@ async def init_db():
         ticket_cols = {row[1] for row in await (await db.execute("PRAGMA table_info(tickets)")).fetchall()}
         if "ai_paused" not in ticket_cols:
             await db.execute("ALTER TABLE tickets ADD COLUMN ai_paused INTEGER DEFAULT 0")
-        # Slot recovery columns are additive so existing installations keep their data.
-        slot_cols = {row[1] for row in await (await db.execute("PRAGMA table_info(slots)")).fetchall()}
-        for column, definition in {
-            "locked": "INTEGER DEFAULT 0",
-            "recovery_hash": "TEXT",
-            "recovery_expires": "TEXT"
-        }.items():
-            if column not in slot_cols:
-                await db.execute(f"ALTER TABLE slots ADD COLUMN {column} {definition}")
         await db.commit()
 
 async def execute(query, params=()):
