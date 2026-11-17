@@ -8,6 +8,7 @@ from core import db
 from core.logging import audit
 from core.security import is_bot_admin, safe_name
 from core.ai import AIUnavailable
+from core.knowledge import KnowledgeBase
 from emojis import Emoji
 
 class TicketCreateView(View):
@@ -126,6 +127,7 @@ async def send_transcript(interaction):
 class TicketCog(commands.Cog):
     def __init__(self,bot):
         self.bot=bot
+        self.knowledge = KnowledgeBase()
     @commands.hybrid_command(name="ticketconfig")
     async def ticket_config(self,ctx,key,category:discord.CategoryChannel,staff_role:discord.Role,*,content):
         if not await is_bot_admin(ctx.author,self.bot.owner_ids): return await ctx.reply("Permission denied.")
@@ -254,15 +256,24 @@ class TicketCog(commands.Cog):
             if not history:
                 return
 
+            knowledge_matches = self.knowledge.search("\n".join(history), limit=4)
+            knowledge_context = self.knowledge.format_context(knowledge_matches)
             prompt = (
                 "You are WardenX Manager, the support assistant in a Discord ticket. "
                 "Respond once to the combined recent user messages, not separately "
                 "to each message. Address every question that can be answered from "
-                "the conversation and configured knowledge. Be concise, clear, and "
-                "helpful. Never invent server-specific policies, prices, links, "
-                "availability, or account details. Never approve refunds, payments, "
-                "bans, role grants, or policy exceptions. Escalate uncertain or "
-                "account-specific actions to staff.\n\n"
+                "the conversation and the supplied server knowledge. When a relevant "
+                "knowledge entry exists, treat its facts as the source of truth, "
+                "rephrase them clearly, and preserve any supplied URLs exactly. "
+                "Do not claim a database match if none is supplied. If no relevant "
+                "entry exists, give general guidance only where safe and clearly "
+                "say when server-specific details need staff confirmation. Never "
+                "invent server-specific policies, prices, links, availability, or "
+                "account details. Never approve refunds, payments, bans, role grants, "
+                "or policy exceptions. Escalate uncertain or account-specific actions "
+                "to staff.\n\n"
+                "SERVER KNOWLEDGE:\n" + knowledge_context
+                + "\n\nRECENT TICKET MESSAGES:\n"
                 + "\n".join(history)
             )
 
