@@ -7,7 +7,7 @@ from discord.ext import commands
 
 from core.ai import AIUnavailable
 from core.security import is_server_owner_or_global
-from core.logging import audit
+from core.logging import audit, ensure_log_channels
 from emojis import Emoji
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -388,6 +388,13 @@ class ServerBuilder(commands.Cog):
                 except discord.HTTPException:
                     continue
 
+        log_setup_note = ""
+        try:
+            log_channels = await ensure_log_channels(ctx.guild, ctx.author)
+            log_setup_note = "Ready: " + ", ".join(f"{kind}={channel.name}" for kind, channel in log_channels.items())
+        except (discord.Forbidden, discord.HTTPException) as exc:
+            log_setup_note = f"Setup incomplete: {str(exc)[:150]}"
+
         access_ok = False
         access_note = "Verification access not applied: configure data/channel_access.json for this guild."
         if access_config:
@@ -406,6 +413,7 @@ class ServerBuilder(commands.Cog):
             f"Channels created: {len(made_channels)} (existing kept: {len(kept_channels)})\n"
             f"Gemini permissions were filtered; elevated permissions required your explicit approval.\n"
             f"Classification roles: WardenX, Bots, Members (new joins classified automatically; existing members are not bulk-edited).\n"
+            f"**Log channels:** {log_setup_note}\n"
             f"**Verification access:** {access_note}\n"
             "Existing matching roles/channels are retained and unrelated channels are not deleted."
         )
