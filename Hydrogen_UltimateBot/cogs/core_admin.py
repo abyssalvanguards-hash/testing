@@ -5,6 +5,48 @@ from core.logging import audit
 from core.security import is_global_owner, is_bot_admin
 import secrets
 
+class HelpPaginator(discord.ui.View):
+    def __init__(self, pages, owner_id):
+        super().__init__(timeout=180)
+        self.pages = pages
+        self.owner_id = owner_id
+        self.page_index = 0
+        self._sync_buttons()
+
+    def _sync_buttons(self):
+        self.previous_button.disabled = self.page_index <= 0
+        self.next_button.disabled = self.page_index >= len(self.pages) - 1
+
+    async def _check_user(self, interaction):
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message(
+                "Only the person who opened this help menu can change its page.",
+                ephemeral=True
+            )
+            return False
+        return True
+
+    @discord.ui.button(label="Previous", style=discord.ButtonStyle.secondary)
+    async def previous_button(self, interaction, button):
+        if not await self._check_user(interaction):
+            return
+        self.page_index = max(0, self.page_index - 1)
+        self._sync_buttons()
+        await interaction.response.edit_message(embed=self.pages[self.page_index], view=self)
+
+    @discord.ui.button(label="Next", style=discord.ButtonStyle.primary)
+    async def next_button(self, interaction, button):
+        if not await self._check_user(interaction):
+            return
+        self.page_index = min(len(self.pages) - 1, self.page_index + 1)
+        self._sync_buttons()
+        await interaction.response.edit_message(embed=self.pages[self.page_index], view=self)
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+
+
 class CoreAdmin(commands.Cog):
     def __init__(self, bot): self.bot = bot
 
@@ -142,74 +184,101 @@ class CoreAdmin(commands.Cog):
         await audit(self.bot, ctx.guild, "Role revoked", f"{role.mention} from {member.mention}", ctx.author)
         await ctx.reply(f"Removed {role.mention} from {member.mention}.")
 
-    @commands.hybrid_command(name="help", description="Show all Hydrogen commands, including subcommands and server-care tools.")
+    @commands.hybrid_command(
+        name="help",
+        description="Browse WardenX commands with usage, descriptions, and access requirements."
+    )
     async def help_command(self, ctx):
-        """Show available commands and concise usage guidance."""
-        embed = discord.Embed(
-            title="WardenX Manager — Help",
-            description=(
-                f"Use slash commands with `/` or prefix commands with `{ctx.prefix}`. "
-                "Command availability depends on your permissions and enabled configuration.\n"
-                "Use a command's slash-command menu for its required arguments."
-            ),
-            color=discord.Color.blurple()
-        )
-        grouped = {}
-        for command in sorted(self.bot.walk_commands(), key=lambda c: c.qualified_name):
-            if command.hidden:
-                continue
-            cog_name = command.cog_name or "General"
-            grouped.setdefault(cog_name, []).append(command)
+        """Show a paginated command guide with one detailed card per command."""
+        commands_list = [
+            command for command in self.bot.walk_commands()
+            if not command.hidden and command.qualified_name not in {"help", "bothelp"}
+        ]
+        commands_list.sort(key=lambda command: command.qualified_name.lower())
 
-        for cog_name, commands_in_group in grouped.items():
-            lines = []
-            for command in commands_in_group:
+        pages = []
+        page_size = 5
+        for offset in range(0, len(commands_list), page_size):
+            embed = discord.Embed(
+                title="WardenX Manager • Command Guide",
+                description=(
+                    "Each field is one command card. It shows what the command does, "
+                    "how to run it, and who is allowed to use it. "
+                    "Use the buttons below to browse all commands."
+                ),
+                color=discord.Color.blurple()
+            )
+            batch = commands_list[offset:offset + page_size]
+            for command in batch:
                 qualified = command.qualified_name
-                description = command.short_doc or command.help or "No description provided."
-                prefix_usage = f"{ctx.prefix}{qualified}"
-                slash_usage = f"/{qualified}"
-                lines.append(f"`{slash_usage}` · `{prefix_usage}` — {description.splitlines()[0][:120]}")
-            # Discord limits each embed field to 1024 characters.
-            chunks = []
-            current = ""
-            for line in lines:
-                candidate = f"{current}\n{line}" if current else line
-                if len(candidate) > 1000:
-                    if current:
-                        chunks.append(current)
-                    current = line[:1000]
-                else:
-                    current = candidate
-            if current:
-                chunks.append(current)
-            for index, chunk in enumerate(chunks, start=1):
-                if len(embed.fields) >= 24:
-                    break
-                field_name = cog_name if index == 1 else f"{cog_name} (continued)"
-                embed.add_field(name=field_name[:256], value=chunk, inline=False)
+                signature = command.signature.strip()
+                slash_usage = f"/{qualified}" + (f" {signature}" if signature else "")
+                prefix_usage = f"{ctx.prefix}{qualified}" + (f" {signature}" if signature else "")
 
-        embed.add_field(
-            name="Server care quick guide",
-            value=(
-                "`/busy 2d` · `/busyoff` · `/busystatus`\n"
-                "`/backup create` · `/backup list` · `/backup export <id>`\n"
-                "`/backup restore <id>` previews a restore; the server owner must confirm it."
-            ),
-            inline=False
-        )
-        embed.set_footer(text="WardenX Manager • Use /help anytime")
-        await ctx.send(embed=embed)
+                description = (
+                    command.description
+                    or command.short_doc
+                    or command.help
+                    or getattr(command.callback, "__doc__", None)
+                    or f"Runs the {qualified.replace('_', ' ')} command."
+                )
+                description = " ".join(str(description).split())[:360]
+                access = self._help_access(command)
+                value = (
+                    f"**What it does**\n{description}\n"
+                    f"**How to use**\n`{slash_usage}`\n`{prefix_usage}`\n"
+                    f"**Who can use it**\n{access}"
+                )
+                embed.add_field(
+                    name=f"▸ {slash_usage}"[:256],
+                    value=value[:1024],
+                    inline=False
+                )
 
-    @commands.hybrid_command(name="bothelp")
-    async def show_bot_help(self, ctx):
-        embed=discord.Embed(title="WardenX Manager",description="Prefix commands and panels. Developer: @h_two_.",color=discord.Color.blurple())
-        embed.add_field(name="Setup",value="`!setup_logs`, `!setrole staff @Role`, `!prefix ?`",inline=False)
-        embed.add_field(name="Tickets",value="`!ticketconfig key #category @staff title | description`, `!ticketpanel key`",inline=False)
-        embed.add_field(name="Applications",value="`!applicationpanel`",inline=False)
-        embed.add_field(name="Moderation",value="`!timeout @member 10m reason`, `!warn @member reason`",inline=False)
-        embed.add_field(name="Payments",value="`!paymentconfig upi ...`, `!invoice 100 upi`, `!paymentcheck <id> <txid>` (BTC/LTC)",inline=False)
-        embed.add_field(name="AI Server Tools",value="`!airestructure`, `!aipermissions`, `!showplan <id>`, `!applyplan <id> CONFIRM` (server owner approval required)",inline=False)
-        embed.add_field(name="AI",value="AI replies in tickets when configured; quota errors hand off to staff.",inline=False)
-        await ctx.reply(embed=embed)
+            page_number = len(pages) + 1
+            total_pages = max(1, (len(commands_list) + page_size - 1) // page_size)
+            embed.set_footer(
+                text=f"WardenX Manager • {len(commands_list)} commands • Page {page_number}/{total_pages}"
+            )
+            pages.append(embed)
+
+        if not pages:
+            pages = [discord.Embed(
+                title="WardenX Manager • Command Guide",
+                description="No commands are currently available.",
+                color=discord.Color.blurple()
+            )]
+
+        view = HelpPaginator(pages, ctx.author.id)
+        await ctx.send(embed=pages[0], view=view)
+
+    def _help_access(self, command):
+        """Infer a command's access gate from its callback and declared checks."""
+        names = set()
+        callback = getattr(command, "callback", None)
+        code = getattr(callback, "__code__", None)
+        if code:
+            names.update(code.co_names)
+        for check in getattr(command, "checks", []):
+            check_code = getattr(check, "__code__", None)
+            if check_code:
+                names.update(check_code.co_names)
+            names.add(getattr(check, "__qualname__", ""))
+
+        cog_name = command.cog_name or ""
+        qualified = command.qualified_name
+        if cog_name == "GeminiAdmin":
+            return "Configured bot owners and user IDs listed as API-key moderators."
+        if "is_global_owner" in names:
+            return "Configured global bot owner only."
+        if "is_bot_admin" in names:
+            return "Configured bot owner or bot admin."
+        if "_moderator" in names:
+            return "Configured server moderator/admin or bot owner."
+        if cog_name == "Applications" and qualified not in {"applicationpanel", "setreview"}:
+            return "Server owner or configured global bot owner (review actions)."
+        if "has_permissions" in names or "has_guild_permissions" in names:
+            return "Members who have the required Discord server permission."
+        return "Server members; Discord channel access and any command-specific checks still apply."
 
 async def setup(bot): await bot.add_cog(CoreAdmin(bot))
