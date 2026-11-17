@@ -100,3 +100,34 @@ def test_timeout_without_fallback_returns_actionable_error():
             assert "timed out for model test-primary-model" in str(exc)
         else:
             raise AssertionError("Expected AIUnavailable")
+
+
+
+def test_key_usage_is_persisted_without_secret(tmp_path):
+    service = GeminiService(["secret-test-key"], model="test-primary-model")
+    service.key_usage_file = tmp_path / "gemini_key_usage.json"
+    session = FakeSession([success_response("key usage tracked")])
+
+    with patch("core.ai.aiohttp.ClientSession", return_value=session):
+        result = asyncio.run(service.ask("test prompt"))
+
+    saved = json.loads(service.key_usage_file.read_text(encoding="utf-8"))
+    assert result == "key usage tracked"
+    assert "1" in saved["keys"]
+    assert "secret-test-key" not in service.key_usage_file.read_text(encoding="utf-8")
+    assert service.last_used_at(1) == saved["keys"]["1"]
+
+
+def test_key_usage_tracks_selected_slot(tmp_path):
+    service = GeminiService(["first-secret", "second-secret"], model="test-primary-model")
+    service.key_usage_file = tmp_path / "gemini_key_usage.json"
+    service.switch_key(2)
+    session = FakeSession([success_response("second slot used")])
+
+    with patch("core.ai.aiohttp.ClientSession", return_value=session):
+        asyncio.run(service.ask("test prompt"))
+
+    saved = json.loads(service.key_usage_file.read_text(encoding="utf-8"))
+    assert "1" not in saved["keys"]
+    assert "2" in saved["keys"]
+    assert "second-secret" not in service.key_usage_file.read_text(encoding="utf-8")
