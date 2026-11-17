@@ -45,6 +45,21 @@ class GeminiService:
         # entire request budget before the fallback gets a chance to respond.
         self.timeout = aiohttp.ClientTimeout(total=40, connect=10)
         self._semaphore = asyncio.Semaphore(2)
+        self.owner_notifier = None
+        self._alerted_key_events = set()
+
+    async def _notify_key_event(self, event, detail):
+        """Notify configured owners once per key/event without exposing the secret."""
+        key_number = self.active_key_index + 1
+        alert_key = (key_number, event)
+        if alert_key in self._alerted_key_events:
+            return
+        self._alerted_key_events.add(alert_key)
+        if self.owner_notifier:
+            try:
+                await self.owner_notifier(event, key_number, str(detail)[:300])
+            except Exception:
+                logging.exception("Could not deliver Gemini owner alert.")
 
     @property
     def active_key(self):
@@ -162,10 +177,12 @@ class GeminiService:
                                             "API_KEY_INVALID" in detail
                                             or "API key not valid" in detail.lower()
                                         ):
+                                            await self._notify_key_event("invalid_key", detail)
                                             raise AIUnavailable(
                                                 "Gemini rejected the API key (HTTP 400). Check that the key in private_config.py is correct and enabled for the Gemini API."
                                             )
                                         if response.status in (401, 403):
+                                            await self._notify_key_event("authorization_failure", detail)
                                             raise AIUnavailable(
                                                 f"Gemini authorization failed (HTTP {response.status}). Check the API key, API access, and project restrictions. Details: {detail}"
                                             )
@@ -174,6 +191,7 @@ class GeminiService:
                                                 f"Gemini model/API endpoint not found (HTTP 404). Check the configured model name {model!r}. Details: {detail}"
                                             )
                                         if response.status == 429:
+                                            await self._notify_key_event("quota_or_rate_limit", detail)
                                             raise AIUnavailable(
                                                 "Gemini quota or rate limit reached (HTTP 429). Check the project's quota and try again later."
                                             )
