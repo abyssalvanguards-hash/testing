@@ -5,6 +5,11 @@
   "permissions": {
     "api_key_moderator_user_ids": []
   },
+  "roles": {
+    "free_gen_role_id": null,
+    "premium_gen_role_id": null,
+    "booster_gen_role_id": null
+  },
   "ai": {
     "provider": "google_gemini",
     "model": "",
