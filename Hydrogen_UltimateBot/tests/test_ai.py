@@ -86,7 +86,7 @@ def test_primary_503_retries_then_uses_fallback():
 
     assert result == "fallback after 503"
     assert len(session.urls) == 3
-    assert "/models/gemini-3.5-flash-lite:" in session.urls[-1]
+    assert "/models/test-fallback-model:" in session.urls[-1]
 
 
 def test_timeout_without_fallback_returns_actionable_error():
